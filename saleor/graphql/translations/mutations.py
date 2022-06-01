@@ -145,6 +145,7 @@ class SeoTranslationInput(graphene.InputObjectType):
 
 class TranslationInput(NameTranslationInput, SeoTranslationInput):
     description = JSONString()
+    longDescription = JSONString()
 
 
 class ShippingPriceTranslationInput(NameTranslationInput):

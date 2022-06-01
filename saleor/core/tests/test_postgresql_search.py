@@ -9,26 +9,41 @@ from ...product.search import search_products
 from ...tests.utils import dummy_editorjs
 
 PRODUCTS = [
-    ("Arabica Coffee", "The best grains in galactic"),
-    ("Cool T-Shirt", "Blue and big."),
-    ("Roasted chicken", "Fabulous vertebrate"),
+    (
+        "Arabica Coffee",
+        "The best grains in galactic",
+        "This grains boost the intelligence and serotonine levels in homo-sapiens",
+    ),
+    (
+        "Cool T-Shirt",
+        "Blue and big.",
+        "These pills aim to complicate ones life by draining cortisol levels.",
+    ),
+    (
+        "Roasted chicken",
+        "Fabulous vertebrate",
+        "Vertebrates tolerant to binge ice cream eating.",
+    ),
 ]
 
 
 @pytest.fixture
 def named_products(category, product_type, channel_USD):
-    def gen_product(name, description):
+    def gen_product(name, description, longDescription):
         product = Product.objects.create(
             name=name,
             slug=slugify(name),
             description=dummy_editorjs(description),
             description_plaintext=description,
+            longDescription=dummy_editorjs(longDescription),
+            longDescription_plaintext=longDescription,
             product_type=product_type,
             category=category,
-            search_document=f"{name}{description}",
+            search_document=f"{name}{description}{longDescription}",
             search_vector=(
                 SearchVector(Value(name), weight="A")
                 + SearchVector(Value(description), weight="C")
+                + SearchVector(Value(longDescription), weight="C")
             ),
         )
         ProductChannelListing.objects.create(
@@ -38,7 +53,7 @@ def named_products(category, product_type, channel_USD):
         )
         return product
 
-    return [gen_product(name, desc) for name, desc in PRODUCTS]
+    return [gen_product(name, desc, longDesc) for name, desc, longDesc in PRODUCTS]
 
 
 def execute_search(phrase):

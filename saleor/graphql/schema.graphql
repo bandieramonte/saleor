@@ -749,8 +749,8 @@ type Query {
     sortBy: SaleSortingInput
 
     """
-    Search sales by name, value or type. 
-    
+    Search sales by name, value or type.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use `filter.search` input instead.
     """
     query: String
@@ -793,8 +793,8 @@ type Query {
     sortBy: VoucherSortingInput
 
     """
-    Search vouchers by name or code. 
-    
+    Search vouchers by name or code.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use `filter.search` input instead.
     """
     query: String
@@ -1552,20 +1552,20 @@ type App implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -1575,20 +1575,20 @@ type App implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -1653,20 +1653,20 @@ interface ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -1676,20 +1676,20 @@ interface ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -2056,20 +2056,20 @@ type Warehouse implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -2079,20 +2079,20 @@ type Warehouse implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -2215,20 +2215,20 @@ type ShippingZone implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -2238,20 +2238,20 @@ type ShippingZone implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -2309,20 +2309,20 @@ type ShippingMethodType implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -2332,20 +2332,20 @@ type ShippingMethodType implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -3292,20 +3292,20 @@ type Product implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -3315,20 +3315,20 @@ type Product implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -3336,6 +3336,7 @@ type Product implements Node & ObjectWithMetadata {
   seoDescription: String
   name: String!
   description: JSONString
+  longDescription: JSONString
   productType: ProductType!
   slug: String!
   category: Category
@@ -3351,8 +3352,11 @@ type Product implements Node & ObjectWithMetadata {
   """
   channel: String
 
-  """Description of the product (JSON)."""
+  """Short description of the product (JSON)."""
   descriptionJson: JSONString @deprecated(reason: "This field will be removed in Saleor 4.0. Use the `description` field instead.")
+
+  """Long description of the product (JSON)."""
+  longDescriptionJson: JSONString @deprecated(reason: "This field will be removed in Saleor 4.0. Use the `longDescription` field instead.")
 
   """The main thumbnail for a product."""
   thumbnail(
@@ -3444,20 +3448,20 @@ type ProductType implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -3467,20 +3471,20 @@ type ProductType implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -3596,20 +3600,20 @@ type Attribute implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -3619,20 +3623,20 @@ type Attribute implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -3983,8 +3987,8 @@ input AttributeFilterInput {
   inCategory: ID
 
   """
-  Specifies the channel by which the data should be filtered. 
-  
+  Specifies the channel by which the data should be filtered.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -4009,20 +4013,20 @@ type Category implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -4032,20 +4036,20 @@ type Category implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -4170,20 +4174,20 @@ type ProductVariant implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -4193,20 +4197,20 @@ type ProductVariant implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -4283,8 +4287,8 @@ type ProductVariant implements Node & ObjectWithMetadata {
     address: AddressInput
 
     """
-    Two-letter ISO 3166-1 country code. 
-    
+    Two-letter ISO 3166-1 country code.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use `address` argument instead.
     """
     countryCode: CountryCode
@@ -4300,8 +4304,8 @@ type ProductVariant implements Node & ObjectWithMetadata {
     address: AddressInput
 
     """
-    Two-letter ISO 3166-1 country code. When provided, the exact quantity from a warehouse operating in shipping zones that contain this country will be returned. Otherwise, it will return the maximum quantity from all shipping zones. 
-    
+    Two-letter ISO 3166-1 country code. When provided, the exact quantity from a warehouse operating in shipping zones that contain this country will be returned. Otherwise, it will return the maximum quantity from all shipping zones.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use `address` argument instead.
     """
     countryCode: CountryCode
@@ -4742,20 +4746,20 @@ type DigitalContent implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -4765,20 +4769,20 @@ type DigitalContent implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -4936,20 +4940,20 @@ type Collection implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -4959,20 +4963,20 @@ type Collection implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -5046,8 +5050,8 @@ input ProductFilterInput {
   hasPreorderedVariants: Boolean
 
   """
-  Specifies the channel by which the data should be filtered. 
-  
+  Specifies the channel by which the data should be filtered.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -5123,7 +5127,7 @@ input ProductOrder {
 
   """
   Specifies the channel in which to sort the data.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -5217,9 +5221,13 @@ type ProductTranslation implements Node {
   seoDescription: String
   name: String
   description: JSONString
+  longDescription: JSONString
 
   """Translated description of the product (JSON)."""
   descriptionJson: JSONString @deprecated(reason: "This field will be removed in Saleor 4.0. Use the `description` field instead.")
+
+  """Translated long description of the product (JSON)."""
+  longDescriptionJson: JSONString @deprecated(reason: "This field will be removed in Saleor 4.0. Use the `longDescription` field instead.")
 }
 
 type WarehouseCountableConnection {
@@ -5284,9 +5292,13 @@ type ProductTranslatableContent implements Node {
   seoDescription: String
   name: String!
   description: JSONString
+  longDescription: JSONString
 
   """Description of the product (JSON)."""
   descriptionJson: JSONString @deprecated(reason: "This field will be removed in Saleor 4.0. Use the `description` field instead.")
+
+  """Long description of the product (JSON)."""
+  longDescriptionJson: JSONString @deprecated(reason: "This field will be removed in Saleor 4.0. Use the `longDescription` field instead.")
 
   """Returns translated product fields for the given language code."""
   translation(
@@ -5437,20 +5449,20 @@ type Page implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -5460,20 +5472,20 @@ type Page implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -5516,20 +5528,20 @@ type PageType implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -5539,20 +5551,20 @@ type PageType implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -5639,20 +5651,20 @@ type Sale implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -5662,20 +5674,20 @@ type Sale implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -5852,20 +5864,20 @@ type Voucher implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -5875,20 +5887,20 @@ type Voucher implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -6054,20 +6066,20 @@ type MenuItem implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -6077,20 +6089,20 @@ type MenuItem implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -6132,20 +6144,20 @@ type Menu implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -6155,20 +6167,20 @@ type Menu implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -6221,8 +6233,8 @@ type Shop {
   """List of available payment gateways."""
   availablePaymentGateways(
     """
-    A currency for which gateways will be returned. 
-    
+    A currency for which gateways will be returned.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use `channel` argument instead.
     """
     currency: String
@@ -6251,8 +6263,8 @@ type Shop {
   """List of countries available in the shop."""
   countries(
     """
-    A language code to return the translation for. 
-    
+    A language code to return the translation for.
+
     DEPRECATED: this field will be removed in Saleor 4.0.
     """
     languageCode: LanguageCodeEnum
@@ -6420,20 +6432,20 @@ type ShippingMethod implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -6443,20 +6455,20 @@ type ShippingMethod implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -6557,20 +6569,20 @@ type User implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -6580,20 +6592,20 @@ type User implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -6694,20 +6706,20 @@ type Checkout implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -6717,20 +6729,20 @@ type Checkout implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -6819,20 +6831,20 @@ type GiftCard implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -6842,20 +6854,20 @@ type GiftCard implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -7089,20 +7101,20 @@ type Order implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -7112,20 +7124,20 @@ type Order implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -7301,20 +7313,20 @@ type Fulfillment implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -7324,20 +7336,20 @@ type Fulfillment implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -7477,20 +7489,20 @@ type Invoice implements ObjectWithMetadata & Job & Node {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -7500,20 +7512,20 @@ type Invoice implements ObjectWithMetadata & Job & Node {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -7583,20 +7595,20 @@ type Payment implements Node & ObjectWithMetadata {
 
   """
   A single key from private metadata. Requires staff permissions to access.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafield(key: String!): String
 
   """
   Private metadata. Requires staff permissions to access. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   privateMetafields(keys: [String!]): Metadata
@@ -7606,20 +7618,20 @@ type Payment implements Node & ObjectWithMetadata {
 
   """
   A single key from public metadata.
-  
+
   Tip: Use GraphQL aliases to fetch multiple keys.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafield(key: String!): String
 
   """
   Public metadata. Use `keys` to control which fields you want to include. The default is to include everything.
-  
+
   Added in Saleor 3.3.
-  
+
   Note: this feature is in a preview state and can be subject to changes at later point.
   """
   metafields(keys: [String!]): Metadata
@@ -8164,7 +8176,7 @@ input CategorySortingInput {
 
   """
   Specifies the channel in which to sort the data.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -8191,8 +8203,8 @@ input CollectionFilterInput {
   ids: [ID!]
 
   """
-  Specifies the channel by which the data should be filtered. 
-  
+  Specifies the channel by which the data should be filtered.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -8209,7 +8221,7 @@ input CollectionSortingInput {
 
   """
   Specifies the channel in which to sort the data.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -8230,14 +8242,14 @@ enum CollectionSortField {
 
   """
   Sort collections by publication date.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   PUBLICATION_DATE
 
   """
   Sort collections by publication date.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   PUBLISHED_AT
@@ -8363,14 +8375,14 @@ enum PageSortField {
 
   """
   Sort pages by publication date.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   PUBLICATION_DATE
 
   """
   Sort pages by publication date.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   PUBLISHED_AT
@@ -8450,15 +8462,15 @@ enum OrderSortField {
   NUMBER
 
   """
-  Sort orders by creation date. 
-  
+  Sort orders by creation date.
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   CREATION_DATE
 
   """
-  Sort orders by creation date. 
-  
+  Sort orders by creation date.
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   CREATED_AT
@@ -8780,7 +8792,7 @@ input SaleSortingInput {
 
   """
   Specifies the channel in which to sort the data.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -8850,7 +8862,7 @@ input VoucherSortingInput {
 
   """
   Specifies the channel in which to sort the data.
-  
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use root-level channel argument instead.
   """
   channel: String
@@ -11127,8 +11139,8 @@ type Mutation {
   """Adds a gift card or a voucher to a checkout."""
   checkoutAddPromoCode(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11146,8 +11158,8 @@ type Mutation {
     billingAddress: AddressInput!
 
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11161,8 +11173,8 @@ type Mutation {
   """
   checkoutComplete(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11176,8 +11188,8 @@ type Mutation {
     redirectUrl: String
 
     """
-    Determines whether to store the payment source for future usage. 
-    
+    Determines whether to store the payment source for future usage.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use checkoutPaymentCreate for this action.
     """
     storeSource: Boolean = false
@@ -11197,8 +11209,8 @@ type Mutation {
   """
   checkoutCustomerAttach(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11217,8 +11229,8 @@ type Mutation {
   """
   checkoutCustomerDetach(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11230,8 +11242,8 @@ type Mutation {
   """Updates email address in the existing checkout object."""
   checkoutEmailUpdate(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11246,8 +11258,8 @@ type Mutation {
   """Deletes a CheckoutLine."""
   checkoutLineDelete(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11273,8 +11285,8 @@ type Mutation {
   """
   checkoutLinesAdd(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11291,8 +11303,8 @@ type Mutation {
   """Updates checkout line in the existing checkout."""
   checkoutLinesUpdate(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11309,8 +11321,8 @@ type Mutation {
   """Remove a gift card or a voucher from a checkout."""
   checkoutRemovePromoCode(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11328,8 +11340,8 @@ type Mutation {
   """Create a new payment for given checkout."""
   checkoutPaymentCreate(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11344,8 +11356,8 @@ type Mutation {
   """Update shipping address in the existing checkout."""
   checkoutShippingAddressUpdate(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11360,8 +11372,8 @@ type Mutation {
   """Updates the shipping method of the checkout."""
   checkoutShippingMethodUpdate(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -11387,8 +11399,8 @@ type Mutation {
   """Update language code in the existing checkout."""
   checkoutLanguageCodeUpdate(
     """
-    The ID of the checkout. 
-    
+    The ID of the checkout.
+
     DEPRECATED: this field will be removed in Saleor 4.0. Use token instead.
     """
     checkoutId: ID
@@ -12111,8 +12123,8 @@ input WebhookCreateInput {
   targetUrl: String
 
   """
-  The events that webhook wants to subscribe. 
-  
+  The events that webhook wants to subscribe.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `asyncEvents` or `syncEvents` instead.
   """
   events: [WebhookEventTypeEnum!]
@@ -12164,8 +12176,8 @@ input WebhookUpdateInput {
   targetUrl: String
 
   """
-  The events that webhook wants to subscribe. 
-  
+  The events that webhook wants to subscribe.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `asyncEvents` or `syncEvents` instead.
   """
   events: [WebhookEventTypeEnum!]
@@ -13071,6 +13083,7 @@ input TranslationInput {
   seoDescription: String
   name: String
   description: JSONString
+  longDescription: JSONString
 }
 
 """
@@ -13142,8 +13155,8 @@ input CollectionCreateInput {
   seo: SeoInput
 
   """
-  Publication date. ISO 8601 standard. 
-  
+  Publication date. ISO 8601 standard.
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   publicationDate: Date
@@ -13233,8 +13246,8 @@ input CollectionInput {
   seo: SeoInput
 
   """
-  Publication date. ISO 8601 standard. 
-  
+  Publication date. ISO 8601 standard.
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   publicationDate: Date
@@ -13297,8 +13310,8 @@ input PublishableChannelListingInput {
   isPublished: Boolean
 
   """
-  Publication date. ISO 8601 standard. 
-  
+  Publication date. ISO 8601 standard.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `publishedAt` field instead.
   """
   publicationDate: Date
@@ -13331,6 +13344,9 @@ input ProductCreateInput {
 
   """Product description (JSON)."""
   description: JSONString
+
+  """Product long description (JSON)."""
+  longDescription: JSONString
 
   """Product name."""
   name: String
@@ -13429,6 +13445,9 @@ input ProductInput {
   """Product description (JSON)."""
   description: JSONString
 
+  """Product long description (JSON)."""
+  longDescription: JSONString
+
   """Product name."""
   name: String
 
@@ -13508,8 +13527,8 @@ input ProductChannelListingAddInput {
   isPublished: Boolean
 
   """
-  Publication date. ISO 8601 standard. 
-  
+  Publication date. ISO 8601 standard.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `publishedAt` field instead.
   """
   publicationDate: Date
@@ -13526,8 +13545,8 @@ input ProductChannelListingAddInput {
   isAvailableForPurchase: Boolean
 
   """
-  A start date from which a product will be available for purchase. When not set and isAvailable is set to True, the current day is assumed. 
-  
+  A start date from which a product will be available for purchase. When not set and isAvailable is set to True, the current day is assumed.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `availableForPurchaseAt` field instead.
   """
   availableForPurchaseDate: Date
@@ -14355,8 +14374,8 @@ input PageCreateInput {
   isPublished: Boolean
 
   """
-  Publication date. ISO 8601 standard. 
-  
+  Publication date. ISO 8601 standard.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `publishedAt` field instead.
   """
   publicationDate: String
@@ -14426,8 +14445,8 @@ input PageInput {
   isPublished: Boolean
 
   """
-  Publication date. ISO 8601 standard. 
-  
+  Publication date. ISO 8601 standard.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `publishedAt` field instead.
   """
   publicationDate: String
@@ -15556,15 +15575,15 @@ input GiftCardCreateInput {
   expiryDate: Date
 
   """
-  Start date of the gift card in ISO 8601 format. 
-  
+  Start date of the gift card in ISO 8601 format.
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   startDate: Date
 
   """
-  End date of the gift card in ISO 8601 format. 
-  
+  End date of the gift card in ISO 8601 format.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `expiryDate` from `expirySettings` instead.
   """
   endDate: Date
@@ -15586,8 +15605,8 @@ input GiftCardCreateInput {
   isActive: Boolean!
 
   """
-  Code to use the gift card. 
-  
+  Code to use the gift card.
+
   DEPRECATED: this field will be removed in Saleor 4.0. The code is now auto generated.
   """
   code: String
@@ -15646,15 +15665,15 @@ input GiftCardUpdateInput {
   expiryDate: Date
 
   """
-  Start date of the gift card in ISO 8601 format. 
-  
+  Start date of the gift card in ISO 8601 format.
+
   DEPRECATED: this field will be removed in Saleor 4.0.
   """
   startDate: Date
 
   """
-  End date of the gift card in ISO 8601 format. 
-  
+  End date of the gift card in ISO 8601 format.
+
   DEPRECATED: this field will be removed in Saleor 4.0. Use `expiryDate` from `expirySettings` instead.
   """
   endDate: Date
@@ -16243,6 +16262,7 @@ input ExportInfoInput {
 enum ProductFieldEnum {
   NAME
   DESCRIPTION
+  LONG_DESCRIPTION
   PRODUCT_TYPE
   CATEGORY
   PRODUCT_WEIGHT

@@ -543,6 +543,7 @@ class ProductInput(graphene.InputObjectType):
         name="collections",
     )
     description = JSONString(description="Product description (JSON).")
+    longDescription = JSONString(description="Product long description (JSON).")
     name = graphene.String(description="Product name.")
     slug = graphene.String(description="Product slug.")
     tax_code = graphene.String(description="Tax rate for enabled tax gateway.")
