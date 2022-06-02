@@ -35,15 +35,13 @@ def named_products(category, product_type, channel_USD):
             slug=slugify(name),
             description=dummy_editorjs(description),
             description_plaintext=description,
-            longDescription=dummy_editorjs(longDescription),
-            longDescription_plaintext=longDescription,
+            longDescription=longDescription,
             product_type=product_type,
             category=category,
-            search_document=f"{name}{description}{longDescription}",
+            search_document=f"{name}{description}",
             search_vector=(
                 SearchVector(Value(name), weight="A")
                 + SearchVector(Value(description), weight="C")
-                + SearchVector(Value(longDescription), weight="C")
             ),
         )
         ProductChannelListing.objects.create(

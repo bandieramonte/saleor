@@ -603,6 +603,11 @@ class ProductCreate(ModelMutation):
             clean_editor_js(description, to_string=True) if description else ""
         )
 
+        longDescription = cleaned_input.get("longDescription")
+        cleaned_input["longDescription_plaintext"] = (
+            clean_editor_js(longDescription, to_string=True) if longDescription else ""
+        )
+
         weight = cleaned_input.get("weight")
         if weight and weight.value < 0:
             raise ValidationError(
