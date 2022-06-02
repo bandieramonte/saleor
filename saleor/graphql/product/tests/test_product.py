@@ -213,7 +213,6 @@ def test_product_query_description(
                 description
                 descriptionJson
                 longDescription
-                longDescriptionJson
             }
         }
         """
@@ -240,7 +239,6 @@ def test_product_query_description(
     assert product_data["description"] == description
     assert product_data["descriptionJson"] == description
     assert product_data["longDescription"] == longDescription
-    assert product_data["longDescriptionJson"] == longDescription
 
 
 def test_product_query_with_no_description(
@@ -258,7 +256,6 @@ def test_product_query_with_no_description(
                 description
                 descriptionJson
                 longDescription
-                longDescriptionJson
             }
         }
         """
@@ -279,7 +276,6 @@ def test_product_query_with_no_description(
     assert product_data["description"] is None
     assert product_data["descriptionJson"] == "{}"
     assert product_data["longDescription"] is None
-    assert product_data["longDescriptionJson"] == "{}"
 
 
 def test_product_query_by_id_not_available_as_staff_user(
