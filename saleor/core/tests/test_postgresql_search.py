@@ -29,13 +29,12 @@ PRODUCTS = [
 
 @pytest.fixture
 def named_products(category, product_type, channel_USD):
-    def gen_product(name, description, longDescription):
+    def gen_product(name, description):
         product = Product.objects.create(
             name=name,
             slug=slugify(name),
             description=dummy_editorjs(description),
             description_plaintext=description,
-            longDescription=longDescription,
             product_type=product_type,
             category=category,
             search_document=f"{name}{description}",
@@ -51,7 +50,7 @@ def named_products(category, product_type, channel_USD):
         )
         return product
 
-    return [gen_product(name, desc, longDesc) for name, desc, longDesc in PRODUCTS]
+    return [gen_product(name, desc) for name, desc in PRODUCTS]
 
 
 def execute_search(phrase):
