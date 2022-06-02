@@ -9,21 +9,9 @@ from ...product.search import search_products
 from ...tests.utils import dummy_editorjs
 
 PRODUCTS = [
-    (
-        "Arabica Coffee",
-        "The best grains in galactic",
-        "This grains boost the intelligence and serotonine levels in homo-sapiens",
-    ),
-    (
-        "Cool T-Shirt",
-        "Blue and big.",
-        "These pills aim to complicate ones life by draining cortisol levels.",
-    ),
-    (
-        "Roasted chicken",
-        "Fabulous vertebrate",
-        "Vertebrates tolerant to binge ice cream eating.",
-    ),
+    ("Arabica Coffee", "The best grains in galactic"),
+    ("Cool T-Shirt", "Blue and big."),
+    ("Roasted chicken", "Fabulous vertebrate"),
 ]
 
 
