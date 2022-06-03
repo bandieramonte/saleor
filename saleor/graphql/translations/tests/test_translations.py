@@ -3170,12 +3170,10 @@ def test_product_and_attribute_translation(user_api_client, product, channel_USD
     assert (
         product_translation_data["description"]
         == product_translation_data["descriptionJson"]
-        == dummy_editorjs("test desription", json_format=True)
+        == dummy_editorjs("test description", json_format=True)
     )
-    assert (
-        product_translation_data["longDescription"]
-        == product_translation_data["longDescriptionJson"]
-        == dummy_editorjs("test long description", json_format=True)
+    assert product_translation_data["longDescription"] == dummy_editorjs(
+        "test long description", json_format=True
     )
     attribute_translation_data = data["product"]["attributes"][0]["attribute"][
         "translation"
