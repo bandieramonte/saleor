@@ -396,6 +396,10 @@ class Product(SeoModel, ModelWithMetadata):
     slug = models.SlugField(max_length=255, unique=True, allow_unicode=True)
     description = SanitizedJSONField(blank=True, null=True, sanitizer=clean_editor_js)
     description_plaintext = TextField(blank=True)
+    longDescription = SanitizedJSONField(
+        blank=True, null=True, sanitizer=clean_editor_js
+    )
+    longDescription_plaintext = TextField(blank=True)
     search_document = models.TextField(blank=True, default="")
     search_vector = SearchVectorField(blank=True, null=True)
 
@@ -479,6 +483,9 @@ class ProductTranslation(SeoModelTranslation):
     )
     name = models.CharField(max_length=250, blank=True, null=True)
     description = SanitizedJSONField(blank=True, null=True, sanitizer=clean_editor_js)
+    longDescription = SanitizedJSONField(
+        blank=True, null=True, sanitizer=clean_editor_js
+    )
 
     class Meta:
         unique_together = (("language_code", "product"),)

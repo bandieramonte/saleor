@@ -212,11 +212,15 @@ def test_product_query_description(
                 name
                 description
                 descriptionJson
+                longDescription
             }
         }
         """
     description = dummy_editorjs("Test description.", json_format=True)
     product.description = dummy_editorjs("Test description.")
+    longDescription = dummy_editorjs("Test long description.", json_format=True)
+    product.longDescription = dummy_editorjs("Test long description.")
+
     product.save()
     variables = {
         "id": graphene.Node.to_global_id("Product", product.pk),
@@ -234,6 +238,7 @@ def test_product_query_description(
     assert product_data is not None
     assert product_data["description"] == description
     assert product_data["descriptionJson"] == description
+    assert product_data["longDescription"] == longDescription
 
 
 def test_product_query_with_no_description(
@@ -250,6 +255,7 @@ def test_product_query_with_no_description(
                 name
                 description
                 descriptionJson
+                longDescription
             }
         }
         """
@@ -269,6 +275,7 @@ def test_product_query_with_no_description(
     assert product_data is not None
     assert product_data["description"] is None
     assert product_data["descriptionJson"] == "{}"
+    assert product_data["longDescription"] is None
 
 
 def test_product_query_by_id_not_available_as_staff_user(
@@ -4241,6 +4248,7 @@ CREATE_PRODUCT_MUTATION = """
                                 name
                             }
                             description
+                            longDescription
                             chargeTaxes
                             taxType {
                                 taxCode
@@ -4292,12 +4300,14 @@ def test_create_product(
     category,
     size_attribute,
     description_json,
+    longDescription_json,
     permission_manage_products,
     monkeypatch,
 ):
     query = CREATE_PRODUCT_MUTATION
 
     description_json = json.dumps(description_json)
+    longDescription_json = json.dumps(longDescription_json)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -4331,6 +4341,7 @@ def test_create_product(
             "name": product_name,
             "slug": product_slug,
             "description": description_json,
+            "longDescription": longDescription_json,
             "chargeTaxes": product_charge_taxes,
             "taxCode": product_tax_rate,
             "attributes": [
@@ -4349,6 +4360,7 @@ def test_create_product(
     assert data["product"]["name"] == product_name
     assert data["product"]["slug"] == product_slug
     assert data["product"]["description"] == description_json
+    assert data["product"]["longDescription"] == longDescription_json
     assert data["product"]["chargeTaxes"] == product_charge_taxes
     assert data["product"]["taxType"]["taxCode"] == product_tax_rate
     assert data["product"]["productType"]["name"] == product_type.name
@@ -4376,6 +4388,8 @@ def test_create_product_description_plaintext(
     query = CREATE_PRODUCT_MUTATION
     description = "some test description"
     description_json = dummy_editorjs(description, json_format=True)
+    longDescription = "some test long description"
+    longDescription_json = dummy_editorjs(longDescription, json_format=True)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -4398,6 +4412,7 @@ def test_create_product_description_plaintext(
             "name": product_name,
             "slug": product_slug,
             "description": description_json,
+            "longDescription": longDescription_json,
             "chargeTaxes": product_charge_taxes,
             "taxCode": product_tax_rate,
         }
@@ -4412,6 +4427,7 @@ def test_create_product_description_plaintext(
 
     product = Product.objects.all().first()
     assert product.description_plaintext == description
+    assert product.longDescription_plaintext == longDescription
 
 
 def test_create_product_with_rich_text_attribute(
@@ -6141,6 +6157,7 @@ def test_create_product_no_slug_in_input(
     product_type,
     category,
     description_json,
+    longDescription_json,
     permission_manage_products,
     monkeypatch,
     input_slug,
@@ -6148,6 +6165,7 @@ def test_create_product_no_slug_in_input(
     query = CREATE_PRODUCT_MUTATION
 
     description_json = json.dumps(description_json)
+    longDescription_json = json.dumps(longDescription_json)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -6232,11 +6250,13 @@ def test_create_product_with_negative_weight(
     product_type,
     category,
     description_json,
+    longDescription_json,
     permission_manage_products,
 ):
     query = CREATE_PRODUCT_MUTATION
 
     description_json = json.dumps(description_json)
+    longDescription_json = json.dumps(longDescription_json)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -6266,11 +6286,13 @@ def test_create_product_with_unicode_in_slug_and_name(
     product_type,
     category,
     description_json,
+    longDescription_json,
     permission_manage_products,
 ):
     query = CREATE_PRODUCT_MUTATION
 
     description_json = json.dumps(description_json)
+    longDescription_json = json.dumps(longDescription_json)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -6304,12 +6326,14 @@ def test_create_product_invalid_product_attributes(
     size_attribute,
     weight_attribute,
     description_json,
+    longDescription_json,
     permission_manage_products,
     monkeypatch,
 ):
     query = CREATE_PRODUCT_MUTATION
 
     description_json = json.dumps(description_json)
+    longDescription_json = json.dumps(longDescription_json)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -6347,6 +6371,7 @@ def test_create_product_invalid_product_attributes(
             "name": product_name,
             "slug": product_slug,
             "description": description_json,
+            "longDescription": longDescription_json,
             "chargeTaxes": product_charge_taxes,
             "taxCode": product_tax_rate,
             "attributes": [
@@ -6578,6 +6603,7 @@ MUTATION_UPDATE_PRODUCT = """
                     }
                     rating
                     description
+                    longDescription
                     chargeTaxes
                     variants {
                         name
@@ -6629,6 +6655,7 @@ def test_update_product(
     non_default_category,
     product,
     other_description_json,
+    other_longDescription_json,
     permission_manage_products,
     monkeypatch,
     color_attribute,
@@ -6638,6 +6665,11 @@ def test_update_product(
     text = expected_other_description_json["blocks"][0]["data"]["text"]
     expected_other_description_json["blocks"][0]["data"]["text"] = strip_tags(text)
     other_description_json = json.dumps(other_description_json)
+
+    expected_other_longDescription_json = other_longDescription_json
+    text = expected_other_longDescription_json["blocks"][0]["data"]["text"]
+    expected_other_longDescription_json["blocks"][0]["data"]["text"] = strip_tags(text)
+    other_longDescription_json = json.dumps(other_longDescription_json)
 
     product_id = graphene.Node.to_global_id("Product", product.pk)
     category_id = graphene.Node.to_global_id("Category", non_default_category.pk)
@@ -6663,6 +6695,7 @@ def test_update_product(
             "name": product_name,
             "slug": product_slug,
             "description": other_description_json,
+            "longDescription": other_longDescription_json,
             "chargeTaxes": product_charge_taxes,
             "taxCode": product_tax_rate,
             "attributes": [{"id": attribute_id, "values": [attr_value]}],
@@ -6678,6 +6711,9 @@ def test_update_product(
     assert data["product"]["name"] == product_name
     assert data["product"]["slug"] == product_slug
     assert data["product"]["description"] == json.dumps(expected_other_description_json)
+    assert data["product"]["longDescription"] == json.dumps(
+        expected_other_longDescription_json
+    )
     assert data["product"]["chargeTaxes"] == product_charge_taxes
     assert data["product"]["taxType"]["taxCode"] == product_tax_rate
     assert not data["product"]["category"]["name"] == category.name
@@ -6701,11 +6737,13 @@ def test_update_and_search_product_by_description(
     non_default_category,
     product,
     other_description_json,
+    other_longDescription_json,
     permission_manage_products,
     color_attribute,
 ):
     query = MUTATION_UPDATE_PRODUCT
     other_description_json = json.dumps(other_description_json)
+    other_longDescription_json = json.dumps(other_longDescription_json)
 
     product_id = graphene.Node.to_global_id("Product", product.pk)
     category_id = graphene.Node.to_global_id("Category", non_default_category.pk)
@@ -6719,6 +6757,7 @@ def test_update_and_search_product_by_description(
             "name": product_name,
             "slug": product_slug,
             "description": other_description_json,
+            "longDescription": other_longDescription_json,
         },
     }
 
@@ -6731,6 +6770,7 @@ def test_update_and_search_product_by_description(
     assert data["product"]["name"] == product_name
     assert data["product"]["slug"] == product_slug
     assert data["product"]["description"] == other_description_json
+    assert data["product"]["longDescription"] == other_longDescription_json
 
 
 def test_update_product_without_description_clear_description_plaintext(
@@ -6739,12 +6779,15 @@ def test_update_product_without_description_clear_description_plaintext(
     non_default_category,
     product,
     other_description_json,
+    other_longDescription_json,
     permission_manage_products,
     color_attribute,
 ):
     query = MUTATION_UPDATE_PRODUCT
     description_plaintext = "some desc"
     product.description_plaintext = description_plaintext
+    longDescription_plaintext = "some long desc"
+    product.longDescription_plaintext = longDescription_plaintext
     product.save()
     product_id = graphene.Node.to_global_id("Product", product.pk)
     category_id = graphene.Node.to_global_id("Category", non_default_category.pk)
@@ -6769,9 +6812,11 @@ def test_update_product_without_description_clear_description_plaintext(
     assert data["product"]["name"] == product_name
     assert data["product"]["slug"] == product_slug
     assert data["product"]["description"] is None
+    assert data["product"]["longDescription"] is None
 
     product.refresh_from_db()
     assert product.description_plaintext == ""
+    assert product.longDescription_plaintext == ""
 
 
 @patch("saleor.plugins.manager.PluginsManager.product_updated")

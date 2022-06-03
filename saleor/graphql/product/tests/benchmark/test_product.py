@@ -85,6 +85,7 @@ def test_product_details(product_with_image, api_client, count_queries, channel_
           product(id: $id, channel: $channel) {
             ...BasicProductFields
             description
+            longDescription
             category {
               id
               name
@@ -357,6 +358,7 @@ def test_product_create(
     category,
     size_attribute,
     description_json,
+    longDescription_json,
     permission_manage_products,
     monkeypatch,
     count_queries,
@@ -370,6 +372,7 @@ def test_product_create(
                         name
                     }
                     description
+                    longDescription
                     chargeTaxes
                     taxType {
                         taxCode
@@ -407,6 +410,7 @@ def test_product_create(
 """
     settings.PLUGINS = ["saleor.plugins.webhook.plugin.WebhookPlugin"]
     description_json = json.dumps(description_json)
+    longDescription_json = json.dumps(longDescription_json)
 
     product_type_id = graphene.Node.to_global_id("ProductType", product_type.pk)
     category_id = graphene.Node.to_global_id("Category", category.pk)
@@ -440,6 +444,7 @@ def test_product_create(
             "name": product_name,
             "slug": product_slug,
             "description": description_json,
+            "longDescription": longDescription_json,
             "chargeTaxes": product_charge_taxes,
             "taxCode": product_tax_rate,
             "attributes": [
@@ -464,6 +469,7 @@ def test_update_product(
     collection_list,
     product_with_variant_with_two_attributes,
     other_description_json,
+    other_longDescription_json,
     permission_manage_products,
     monkeypatch,
     count_queries,
@@ -477,6 +483,7 @@ def test_update_product(
                     }
                     rating
                     description
+                    longDescription
                     chargeTaxes
                     variants {
                         name
@@ -519,6 +526,7 @@ def test_update_product(
     for collection in collection_list:
         collection.products.add(product)
     other_description_json = json.dumps(other_description_json)
+    other_longDescription_json = json.dumps(other_longDescription_json)
     settings.PLUGINS = ["saleor.plugins.webhook.plugin.WebhookPlugin"]
 
     product_id = graphene.Node.to_global_id("Product", product.pk)
@@ -542,6 +550,7 @@ def test_update_product(
             "name": product_name,
             "slug": product_slug,
             "description": other_description_json,
+            "longDescription": other_longDescription_json,
             "chargeTaxes": product_charge_taxes,
             "taxCode": product_tax_rate,
         },

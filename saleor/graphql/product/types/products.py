@@ -746,6 +746,7 @@ class Product(ChannelContextTypeWithMetadata, ModelObjectType):
     seo_description = graphene.String()
     name = graphene.String(required=True)
     description = JSONString()
+    longDescription = JSONString()
     product_type = graphene.Field(lambda: ProductType, required=True)
     slug = graphene.String(required=True)
     category = graphene.Field(lambda: Category)
@@ -765,6 +766,12 @@ class Product(ChannelContextTypeWithMetadata, ModelObjectType):
         description="Description of the product (JSON).",
         deprecation_reason=(
             f"{DEPRECATED_IN_3X_FIELD} Use the `description` field instead."
+        ),
+    )
+    longDescription_json = JSONString(
+        description="Long description of the product (JSON).",
+        deprecation_reason=(
+            f"{DEPRECATED_IN_3X_FIELD} Use the `longDescription` field instead."
         ),
     )
     thumbnail = graphene.Field(

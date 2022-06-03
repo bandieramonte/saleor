@@ -3,7 +3,7 @@ repos:
     rev: 22.3.0
     hooks:
       - id: black
-        language_version: python3.8
+        language_version: python3.10
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
@@ -39,19 +39,19 @@ repos:
         language: system
         exclude: tests/
 
-  - repo: local
-    hooks:
-      - id: migrations-check
-        language: system
-        name: Check for uncreated migrations.
-        entry: sh -c "./manage.py makemigrations --check --dry-run"
-        files: "models\\.py$"
-        stages: [commit]
+  # - repo: local
+  #   hooks:
+  #     - id: migrations-check
+  #       language: system
+  #       name: Check for uncreated migrations.
+  #       entry: sh -c "./manage.py makemigrations --check --dry-run"
+  #       files: "models\\.py$"
+  #       stages: [commit]
 
-  - repo: local
-    hooks:
-      - id: gql-schema-check
-        language: system
-        name: Check GraphQL schema is up to date.
-        entry: sh -c "./manage.py get_graphql_schema | diff saleor/graphql/schema.graphql -"
-        stages: [commit]
+  # - repo: local
+  #   hooks:
+  #     - id: gql-schema-check
+  #       language: system
+  #       name: Check GraphQL schema is up to date.
+  #       entry: sh -c "./manage.py get_graphql_schema | diff saleor/graphql/schema.graphql -"
+  #       stages: [commit]

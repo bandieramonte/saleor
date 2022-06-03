@@ -188,6 +188,13 @@ class ProductTranslation(BaseTranslationType):
             f"{DEPRECATED_IN_3X_FIELD} Use the `description` field instead."
         ),
     )
+    longDescription = JSONString()
+    longDescription_json = JSONString(
+        description="Translated long description of the product (JSON).",
+        deprecation_reason=(
+            f"{DEPRECATED_IN_3X_FIELD} Use the `longDescription` field instead."
+        ),
+    )
 
     class Meta:
         model = product_models.ProductTranslation
@@ -211,6 +218,14 @@ class ProductTranslatableContent(ModelObjectType):
             f"{DEPRECATED_IN_3X_FIELD} Use the `description` field instead."
         ),
     )
+    longDescription = JSONString()
+    longDescription_json = JSONString(
+        description="Long description of the product (JSON).",
+        deprecation_reason=(
+            f"{DEPRECATED_IN_3X_FIELD} Use the `longDescription` field instead."
+        ),
+    )
+
     translation = TranslationField(ProductTranslation, type_name="product")
     product = graphene.Field(
         "saleor.graphql.product.types.products.Product",

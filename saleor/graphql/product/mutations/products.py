@@ -543,6 +543,7 @@ class ProductInput(graphene.InputObjectType):
         name="collections",
     )
     description = JSONString(description="Product description (JSON).")
+    longDescription = JSONString(description="Product long description (JSON).")
     name = graphene.String(description="Product name.")
     slug = graphene.String(description="Product slug.")
     tax_code = graphene.String(description="Tax rate for enabled tax gateway.")
@@ -600,6 +601,11 @@ class ProductCreate(ModelMutation):
         description = cleaned_input.get("description")
         cleaned_input["description_plaintext"] = (
             clean_editor_js(description, to_string=True) if description else ""
+        )
+
+        longDescription = cleaned_input.get("longDescription")
+        cleaned_input["longDescription_plaintext"] = (
+            clean_editor_js(longDescription, to_string=True) if longDescription else ""
         )
 
         weight = cleaned_input.get("weight")
