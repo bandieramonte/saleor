@@ -33,7 +33,6 @@ def test_product_translation(user_api_client, product, channel_USD):
                 description
                 descriptionJson
                 longDescription
-                longDescriptionJson
                 language {
                     code
                 }
@@ -56,10 +55,8 @@ def test_product_translation(user_api_client, product, channel_USD):
         == translation_data["descriptionJson"]
         == dummy_editorjs("test description", json_format=True)
     )
-    assert (
-        translation_data["longDescription"]
-        == translation_data["longDescriptionJson"]
-        == dummy_editorjs("test long description", json_format=True)
+    assert translation_data["longDescription"] == dummy_editorjs(
+        "test long description", json_format=True
     )
 
 
@@ -74,7 +71,6 @@ def test_product_translation_without_description(user_api_client, product, chann
                 description
                 descriptionJson
                 longDescription
-                longDescriptionJson
                 language {
                     code
                 }
@@ -95,7 +91,6 @@ def test_product_translation_without_description(user_api_client, product, chann
     assert translation_data["description"] is None
     assert translation_data["descriptionJson"] == "{}"
     assert translation_data["longDescription"] is None
-    assert translation_data["longDescriptionJson"] == "{}"
 
 
 def test_product_translation_with_app(app_api_client, product, channel_USD):
@@ -152,12 +147,10 @@ def test_product_variant_translation(user_api_client, variant, channel_USD):
 
 def test_collection_translation(user_api_client, published_collection, channel_USD):
     description = dummy_editorjs("test description")
-    longDescription = dummy_editorjs("test description")
     published_collection.translations.create(
         language_code="pl",
         name="Kolekcja",
         description=description,
-        longDescription=longDescription,
     )
 
     query = """
@@ -167,8 +160,6 @@ def test_collection_translation(user_api_client, published_collection, channel_U
                 name
                 description
                 descriptionJson
-                longDescription
-                longDescriptionJson
                 language {
                     code
                 }
@@ -189,11 +180,6 @@ def test_collection_translation(user_api_client, published_collection, channel_U
         translation_data["description"]
         == translation_data["descriptionJson"]
         == dummy_editorjs("test description", json_format=True)
-    )
-    assert (
-        translation_data["longDescription"]
-        == translation_data["longDescriptionJson"]
-        == dummy_editorjs("test long description", json_format=True)
     )
 
 
@@ -209,8 +195,6 @@ def test_collection_translation_without_description(
                 name
                 description
                 descriptionJson
-                longDescription
-                longDescriptionJson
                 language {
                     code
                 }
@@ -229,18 +213,14 @@ def test_collection_translation_without_description(
     assert translation_data["language"]["code"] == "PL"
     assert translation_data["description"] is None
     assert translation_data["descriptionJson"] == "{}"
-    assert translation_data["longDescription"] is None
-    assert translation_data["longDescriptionJson"] == "{}"
 
 
 def test_category_translation(user_api_client, category):
     description = dummy_editorjs("test description")
-    longDescription = dummy_editorjs("test long description")
     category.translations.create(
         language_code="pl",
         name="Kategoria",
         description=description,
-        longDescription=longDescription,
     )
 
     query = """
@@ -250,8 +230,6 @@ def test_category_translation(user_api_client, category):
                 name
                 description
                 descriptionJson
-                longDescription
-                longDescriptionJson
                 language {
                     code
                 }
@@ -272,11 +250,6 @@ def test_category_translation(user_api_client, category):
         == translation_data["descriptionJson"]
         == dummy_editorjs("test description", json_format=True)
     )
-    assert (
-        translation_data["longDescription"]
-        == translation_data["longDescriptionJson"]
-        == dummy_editorjs("test long description", json_format=True)
-    )
 
 
 def test_category_translation_without_description(user_api_client, category):
@@ -289,8 +262,6 @@ def test_category_translation_without_description(user_api_client, category):
                 name
                 description
                 descriptionJson
-                longDescription
-                longDescriptionJson
                 language {
                     code
                 }
@@ -308,8 +279,6 @@ def test_category_translation_without_description(user_api_client, category):
     assert translation_data["language"]["code"] == "PL"
     assert translation_data["description"] is None
     assert translation_data["descriptionJson"] == "{}"
-    assert translation_data["longDescription"] is None
-    assert translation_data["longDescriptionJson"] == "{}"
 
 
 def test_voucher_translation(staff_api_client, voucher, permission_manage_discounts):
@@ -3138,7 +3107,6 @@ def test_product_and_attribute_translation(user_api_client, product, channel_USD
                     description
                     descriptionJson
                     longDescription
-                    longDescriptionJson
                     language {
                         code
                     }
