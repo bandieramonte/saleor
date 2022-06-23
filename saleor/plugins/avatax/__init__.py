@@ -16,7 +16,11 @@ from requests.auth import HTTPBasicAuth
 from ...checkout import base_calculations
 from ...checkout.utils import is_shipping_required
 from ...core.taxes import TaxError
-from ...order.utils import get_total_order_discount
+from ...discount import VoucherType
+from ...order.utils import (
+    get_total_order_discount_excluding_shipping,
+    get_voucher_discount_assigned_to_order,
+)
 from ...shipping.models import ShippingMethodChannelListing
 
 if TYPE_CHECKING:
@@ -204,6 +208,8 @@ def append_line_to_data(
     item_code: str,
     name: str = None,
     tax_included: Optional[bool] = None,
+    discounted: Optional[bool] = False,
+    tax_override_data: Optional[dict] = None,
     ref1: Optional[str] = None,
     ref2: Optional[str] = None,
 ):
@@ -215,9 +221,12 @@ def append_line_to_data(
         "taxCode": tax_code,
         "taxIncluded": tax_included,
         "itemCode": item_code,
+        "discounted": discounted,
         "description": name,
     }
 
+    if tax_override_data:
+        line_data["taxOverride"] = tax_override_data
     if ref1:
         line_data["ref1"] = ref1
     if ref2:
@@ -229,17 +238,19 @@ def append_shipping_to_data(
     data: List[Dict],
     shipping_price_amount: Optional[Decimal],
     shipping_tax_code: str,
+    discounted: Optional[bool] = False,
 ):
     charge_taxes_on_shipping = (
         Site.objects.get_current().settings.charge_taxes_on_shipping
     )
-    if charge_taxes_on_shipping and shipping_price_amount:
+    if charge_taxes_on_shipping and shipping_price_amount is not None:
         append_line_to_data(
             data,
             quantity=1,
             amount=shipping_price_amount,
             tax_code=shipping_tax_code,
             item_code="Shipping",
+            discounted=discounted,
         )
 
 
@@ -252,9 +263,25 @@ def get_checkout_lines_data(
     data: List[Dict[str, Union[str, int, bool, None]]] = []
     channel = checkout_info.channel
     tax_included = Site.objects.get_current().settings.include_taxes_in_prices
+    voucher = checkout_info.voucher
+    is_entire_order_discount = (
+        voucher.type == VoucherType.ENTIRE_ORDER
+        if voucher and not voucher.apply_once_per_order
+        else False
+    )
     for line_info in lines_info:
+        tax_override_data = {}
         if not line_info.product.charge_taxes:
-            continue
+            if not is_entire_order_discount:
+                continue
+            # if there is a voucher for the entire order we need to attach this line
+            # with 0 tax to propagate discount through all lines
+            tax_override_data = {
+                "type": "taxAmount",
+                "taxAmount": 0,
+                "reason": "Charge taxes for this product are turned off.",
+            }
+
         product = line_info.product
         name = product.name
         product_type = line_info.product_type
@@ -274,18 +301,28 @@ def get_checkout_lines_data(
             undiscounted_amount = prices_data.undiscounted_price.net.amount
             price_with_discounts_amount = prices_data.price_with_discounts.net.amount
 
+        # This is a workaround for Avatax and sending a lines with amount 0. Like
+        # order lines which are fully discounted for some reason. If we use a
+        # standard tax_code, Avatax will raise an exception: "When shipping
+        # cross-border into CIF countries, Tax Included is not supported with mixed
+        # positive and negative line amounts."
+        # This is also a workaround for Avatax when the tax_override_data is used.
+        # Otherwise Avatax will raise an exception: "TaxIncluded is not supported in
+        # combination with caps, thresholds, or base rules."
+        tax_code = (
+            tax_code
+            if undiscounted_amount and not tax_override_data
+            else DEFAULT_TAX_CODE
+        )
         append_line_to_data_kwargs = {
             "data": data,
             "quantity": line_info.line.quantity,
-            # This is a workaround for Avatax and sending a lines with amount 0. Like
-            # order lines which are fully discounted for some reason. If we use a
-            # standard tax_code, Avatax will raise an exception: "When shipping
-            # cross-border into CIF countries, Tax Included is not supported with mixed
-            # positive and negative line amounts."
-            "tax_code": tax_code if undiscounted_amount else DEFAULT_TAX_CODE,
+            "tax_code": tax_code,
             "item_code": item_code,
             "name": name,
             "tax_included": tax_included,
+            "discounted": is_entire_order_discount,
+            "tax_override_data": tax_override_data,
         }
 
         append_line_to_data(
@@ -297,17 +334,21 @@ def get_checkout_lines_data(
     delivery_method = checkout_info.delivery_method_info.delivery_method
     if delivery_method:
         price = getattr(delivery_method, "price", None)
+        is_shipping_discount = (
+            voucher.type == VoucherType.SHIPPING if voucher else False
+        )
         append_shipping_to_data(
             data,
             price.amount if price else None,
             config.shipping_tax_code,
+            is_shipping_discount,
         )
 
     return data
 
 
 def get_order_lines_data(
-    order: "Order", config: AvataxConfiguration, invoice_transaction_type: bool = False
+    order: "Order", config: AvataxConfiguration, discounted: bool
 ) -> List[Dict[str, Union[str, int, bool, None]]]:
     data: List[Dict[str, Union[str, int, bool, None]]] = []
     lines = order.lines.prefetch_related(
@@ -315,7 +356,7 @@ def get_order_lines_data(
         "variant__product__collections",
         "variant__product__product_type",
     ).filter(variant__product__charge_taxes=True)
-    system_tax_included = Site.objects.get_current().settings.include_taxes_in_prices
+    tax_included = Site.objects.get_current().settings.include_taxes_in_prices
     for line in lines:
         if not line.variant:
             continue
@@ -324,14 +365,6 @@ def get_order_lines_data(
         tax_code = retrieve_tax_code_from_meta(product, default=None)
         tax_code = tax_code or retrieve_tax_code_from_meta(product_type)
         prices_data = base_calculations.base_order_line_total(line)
-
-        # Confirm if line doesn't have included taxes in the price. If not then, we
-        # check if the current Saleor config doesn't assume that taxes are included in
-        # prices
-        line_has_included_taxes = (
-            line.unit_price_gross_amount != line.unit_price_net_amount
-        )
-        tax_included = line_has_included_taxes or system_tax_included
 
         if tax_included:
             undiscounted_amount = prices_data.undiscounted_price.gross.amount
@@ -352,31 +385,32 @@ def get_order_lines_data(
             "item_code": line.variant.sku or line.variant.get_global_id(),
             "name": line.variant.product.name,
             "tax_included": tax_included,
+            "discounted": discounted,
         }
         append_line_to_data(
             **append_line_to_data_kwargs,
             amount=price_with_discounts_amount,
         )
 
-    discount_amount = get_total_order_discount(order)
-    if discount_amount:
-        append_line_to_data(
-            data=data,
-            quantity=1,
-            amount=discount_amount.amount * -1,
-            tax_code=COMMON_DISCOUNT_VOUCHER_CODE,
-            item_code="Voucher",
-            name="Order discount",
-            tax_included=True,  # Voucher should be always applied as a gross amount
-        )
-
     shipping_method_channel_listing = ShippingMethodChannelListing.objects.filter(
         shipping_method=order.shipping_method_id, channel=order.channel_id
     ).first()
     if shipping_method_channel_listing:
+        shipping_discount_amount = Decimal("0")
+        if (
+            order.voucher_id
+            and order.voucher.type == VoucherType.SHIPPING  # type: ignore
+        ):
+            shipping_discount = get_voucher_discount_assigned_to_order(order)
+            if shipping_discount:
+                shipping_discount_amount = shipping_discount.amount_value
+        shipping_price = max(
+            shipping_method_channel_listing.price.amount - shipping_discount_amount,
+            Decimal("0"),
+        )
         append_shipping_to_data(
             data,
-            shipping_method_channel_listing.price.amount,
+            shipping_price,
             config.shipping_tax_code,
         )
     return data
@@ -390,6 +424,7 @@ def generate_request_data(
     customer_email: str,
     config: AvataxConfiguration,
     currency: str,
+    discount: Optional[Decimal] = None,
 ):
     data = {
         "companyCode": config.company_name,
@@ -399,6 +434,8 @@ def generate_request_data(
         "date": str(date.today()),
         # https://developer.avalara.com/avatax/dev-guide/transactions/simple-transaction/
         "customerCode": 0,
+        # https://developer.avalara.com/avatax/dev-guide/discounts-and-overrides/discounts/
+        "discount": str(discount) if discount else None,
         "addresses": {
             "shipFrom": {
                 "line1": config.from_street_address,
@@ -432,9 +469,17 @@ def generate_request_data_from_checkout(
     transaction_type=TransactionType.ORDER,
     discounts=None,
 ):
-
     address = checkout_info.shipping_address or checkout_info.billing_address
     lines = get_checkout_lines_data(checkout_info, lines_info, config, discounts)
+    voucher = checkout_info.voucher
+    # for apply_once_per_order vouchers the discount is already applied on lines
+    discount_amount = (
+        checkout_info.checkout.discount.amount
+        if voucher
+        and voucher.type != VoucherType.SPECIFIC_PRODUCT
+        and not voucher.apply_once_per_order
+        else 0
+    )
 
     currency = checkout_info.checkout.currency
     customer_email = cast(str, checkout_info.get_customer_email())
@@ -444,6 +489,7 @@ def generate_request_data_from_checkout(
         transaction_token=transaction_token or str(checkout_info.checkout.token),
         address=address.as_data() if address else {},
         customer_email=customer_email,
+        discount=discount_amount,
         config=config,
         currency=currency,
     )
@@ -509,8 +555,9 @@ def get_order_request_data(order: "Order", config: AvataxConfiguration):
         if not (order.is_draft() or order.is_unconfirmed())
         else TransactionType.ORDER
     )
-    is_invoice_transaction = transaction == TransactionType.INVOICE
-    lines = get_order_lines_data(order, config, is_invoice_transaction)
+    discount_amount = get_total_order_discount_excluding_shipping(order).amount
+    discounted_lines = discount_amount != Decimal("0")
+    lines = get_order_lines_data(order, config, discounted=discounted_lines)
     data = generate_request_data(
         transaction_type=transaction,
         lines=lines,
@@ -519,6 +566,7 @@ def get_order_request_data(order: "Order", config: AvataxConfiguration):
         customer_email=order.user_email,
         config=config,
         currency=order.currency,
+        discount=discount_amount,
     )
     return data
 

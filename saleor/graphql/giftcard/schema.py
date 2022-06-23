@@ -43,11 +43,11 @@ class GiftCardQueries(graphene.ObjectType):
     gift_cards = FilterConnectionField(
         GiftCardCountableConnection,
         sort_by=GiftCardSortingInput(
-            description=f"{ADDED_IN_31} Sort gift cards. {PREVIEW_FEATURE}"
+            description="Sort gift cards." + ADDED_IN_31 + PREVIEW_FEATURE
         ),
         filter=GiftCardFilterInput(
             description=(
-                f"{ADDED_IN_31} Filtering options for gift cards. {PREVIEW_FEATURE}"
+                "Filtering options for gift cards." + ADDED_IN_31 + PREVIEW_FEATURE
             )
         ),
         description="List of gift cards.",
@@ -57,7 +57,7 @@ class GiftCardQueries(graphene.ObjectType):
     )
     gift_card_currencies = PermissionsField(
         NonNullList(graphene.String),
-        description=f"{ADDED_IN_31} List of gift card currencies. {PREVIEW_FEATURE}",
+        description="List of gift card currencies." + ADDED_IN_31 + PREVIEW_FEATURE,
         required=True,
         permissions=[
             GiftcardPermissions.MANAGE_GIFT_CARD,
@@ -68,17 +68,19 @@ class GiftCardQueries(graphene.ObjectType):
         filter=GiftCardTagFilterInput(
             description="Filtering options for gift card tags."
         ),
-        description=f"{ADDED_IN_31} List of gift card tags. {PREVIEW_FEATURE}",
+        description="List of gift card tags." + ADDED_IN_31 + PREVIEW_FEATURE,
         permissions=[
             GiftcardPermissions.MANAGE_GIFT_CARD,
         ],
     )
 
-    def resolve_gift_card(self, info, **data):
+    @staticmethod
+    def resolve_gift_card(_root, _info, **data):
         _, id = from_global_id_or_error(data.get("id"), GiftCard)
         return resolve_gift_card(id)
 
-    def resolve_gift_cards(self, info, **data):
+    @staticmethod
+    def resolve_gift_cards(_root, info, **data):
         sorting_by_balance = "sort_by" in data and "current_balance_amount" in data[
             "sort_by"
         ].get("field", [])
@@ -89,10 +91,12 @@ class GiftCardQueries(graphene.ObjectType):
         qs = filter_connection_queryset(qs, data)
         return create_connection_slice(qs, info, data, GiftCardCountableConnection)
 
-    def resolve_gift_card_currencies(self, info, **data):
+    @staticmethod
+    def resolve_gift_card_currencies(_root, _info):
         return set(models.GiftCard.objects.values_list("currency", flat=True))
 
-    def resolve_gift_card_tags(self, info, **data):
+    @staticmethod
+    def resolve_gift_card_tags(_root, info, **data):
         qs = resolve_gift_card_tags()
         qs = filter_connection_queryset(qs, data)
         return create_connection_slice(qs, info, data, GiftCardTagCountableConnection)

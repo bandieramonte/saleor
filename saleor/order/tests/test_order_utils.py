@@ -6,6 +6,7 @@ import pytest
 from prices import Money, TaxedMoney
 
 from ...checkout.fetch import fetch_checkout_info, fetch_checkout_lines
+from ...discount import DiscountValueType, OrderDiscountType
 from ...giftcard import GiftCardEvents
 from ...giftcard.models import GiftCardEvent
 from ...order.interface import OrderTaxedPricesData
@@ -18,6 +19,7 @@ from ..utils import (
     add_gift_cards_to_order,
     add_variant_to_order,
     change_order_line_quantity,
+    get_total_order_discount_excluding_shipping,
     get_valid_shipping_methods_for_order,
     match_orders_with_new_user,
     update_taxes_for_order_line,
@@ -49,6 +51,7 @@ def test_change_quantity_generates_proper_event(
 
     line = order_with_lines.lines.last()
     line.quantity = previous_quantity
+
     line_info = OrderLineInfo(
         line=line,
         quantity=line.quantity,
@@ -84,9 +87,14 @@ def test_change_quantity_generates_proper_event(
     new_event = OrderEvent.objects.last()  # type: OrderEvent
     assert new_event.type == expected_type
     assert new_event.user == staff_user
+    expected_line_pk = None if new_quantity == 0 else str(line.pk)
     assert new_event.parameters == {
         "lines": [
-            {"quantity": expected_quantity, "line_pk": line.pk, "item": str(line)}
+            {
+                "quantity": expected_quantity,
+                "line_pk": expected_line_pk,
+                "item": str(line),
+            }
         ]
     }
 
@@ -315,37 +323,46 @@ def test_update_taxes_for_order_lines_discounted_price(order_with_lines):
         assert line.undiscounted_total_price == total_price + discount
 
 
-def test_add_variant_to_order(order, customer_user, variant, site_settings):
+def test_add_variant_to_order(
+    order, customer_user, variant, site_settings, discount_info
+):
     # given
-    unit_price = TaxedMoney(net=Money("10.23", "USD"), gross=Money("15.80", "USD"))
-    total_price = TaxedMoney(net=Money("30.34", "USD"), gross=Money("36.49", "USD"))
-    tax_rate = Decimal("0.23")
-    unit_price_data = OrderTaxedPricesData(
-        undiscounted_price=unit_price,
-        price_with_discounts=unit_price,
+    manager = get_plugins_manager()
+    quantity = 4
+    collections = variant.product.collections.all()
+    channel_listing = variant.channel_listings.get(channel=order.channel)
+    base_unit_price = variant.get_price(
+        variant.product, collections, order.channel, channel_listing, [discount_info]
     )
-    total_price_data = OrderTaxedPricesData(
-        undiscounted_price=total_price,
-        price_with_discounts=total_price,
+    unit_price = TaxedMoney(net=base_unit_price, gross=base_unit_price)
+    total_price = unit_price * quantity
+    undiscounted_base_unit_price = variant.get_price(
+        variant.product, collections, order.channel, channel_listing, []
     )
-    manager = Mock(
-        calculate_order_line_unit=Mock(return_value=unit_price_data),
-        calculate_order_line_total=Mock(return_value=total_price_data),
-        get_order_line_tax_rate=Mock(return_value=tax_rate),
+    undiscounted_unit_price = TaxedMoney(
+        net=undiscounted_base_unit_price, gross=undiscounted_base_unit_price
     )
-    app = None
+    undiscounted_total_price = undiscounted_unit_price * quantity
 
     # when
     line = add_variant_to_order(
-        order, variant, 4, customer_user, app, manager, site_settings
+        order,
+        variant,
+        quantity,
+        customer_user,
+        None,
+        manager,
+        site_settings,
+        [discount_info],
     )
 
     # then
     assert line.unit_price == unit_price
     assert line.total_price == total_price
-    assert line.undiscounted_unit_price == unit_price
-    assert line.undiscounted_total_price == total_price
-    assert line.tax_rate == tax_rate
+    assert line.undiscounted_unit_price == undiscounted_unit_price
+    assert line.undiscounted_total_price == undiscounted_total_price
+    assert line.unit_price != line.undiscounted_unit_price
+    assert line.undiscounted_unit_price != line.undiscounted_total_price
 
 
 def test_add_gift_cards_to_order(
@@ -495,3 +512,79 @@ def test_update_taxes_for_order_line_deleted_variant(order_with_lines):
     assert order_line.tax_rate == order_line_unchanged_copy.tax_rate
     assert order_line.undiscounted_unit_price == order_line_unchanged_copy.unit_price
     assert order_line.undiscounted_total_price == order_line_unchanged_copy.total_price
+
+
+def test_get_total_order_discount_excluding_shipping_no_discounts(order):
+    # when
+    discount_amount = get_total_order_discount_excluding_shipping(order)
+
+    # then
+    assert discount_amount == Money("0", order.currency)
+
+
+def test_get_total_order_discount_excluding_shipping(order, voucher_shipping_type):
+    # given
+    order.discounts.create(
+        type=OrderDiscountType.VOUCHER,
+        value_type=DiscountValueType.FIXED,
+        value=Decimal("10.0"),
+        name=voucher_shipping_type.code,
+        currency="USD",
+        amount_value=Decimal("10.0"),
+    )
+    manual_discount = order.discounts.create(
+        type=OrderDiscountType.MANUAL,
+        value_type=DiscountValueType.FIXED,
+        value=Decimal("10.0"),
+        name=voucher_shipping_type.code,
+        currency="USD",
+        amount_value=Decimal("10.0"),
+    )
+    currency = order.currency
+    total = TaxedMoney(Money(10, currency), Money(10, currency))
+    order.voucher = voucher_shipping_type
+    order.total = total
+    order.undiscounted_total = total
+    order.save()
+
+    # when
+    discount_amount = get_total_order_discount_excluding_shipping(order)
+
+    # then
+    assert discount_amount == Money(manual_discount.amount_value, order.currency)
+
+
+def test_get_total_order_discount_excluding_shipping_no_shipping_discounts(
+    order, voucher
+):
+    # given
+    discount_1 = order.discounts.create(
+        type=OrderDiscountType.VOUCHER,
+        value_type=DiscountValueType.FIXED,
+        value=Decimal("10.0"),
+        name=voucher.code,
+        currency="USD",
+        amount_value=Decimal("10.0"),
+    )
+    discount_2 = order.discounts.create(
+        type=OrderDiscountType.MANUAL,
+        value_type=DiscountValueType.FIXED,
+        value=Decimal("10.0"),
+        name=voucher.code,
+        currency="USD",
+        amount_value=Decimal("10.0"),
+    )
+    currency = order.currency
+    total = TaxedMoney(Money(30, currency), Money(30, currency))
+    order.voucher = voucher
+    order.total = total
+    order.undiscounted_total = total
+    order.save()
+
+    # when
+    discount_amount = get_total_order_discount_excluding_shipping(order)
+
+    # then
+    assert discount_amount == Money(
+        discount_1.amount_value + discount_2.amount_value, order.currency
+    )

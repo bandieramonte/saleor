@@ -151,7 +151,7 @@ class Shop(graphene.ObjectType):
     channel_currencies = PermissionsField(
         NonNullList(graphene.String),
         description=(
-            f"{ADDED_IN_31} List of all currencies supported by shop's channels."
+            "List of all currencies supported by shop's channels." + ADDED_IN_31
         ),
         required=True,
         permissions=[
@@ -207,11 +207,11 @@ class Shop(graphene.ObjectType):
         description="Include taxes in prices.", required=True
     )
     fulfillment_auto_approve = graphene.Boolean(
-        description=f"{ADDED_IN_31} Automatically approve all new fulfillments.",
+        description="Automatically approve all new fulfillments." + ADDED_IN_31,
         required=True,
     )
     fulfillment_allow_unpaid = graphene.Boolean(
-        description=f"{ADDED_IN_31} Allow to approve fulfillments which are unpaid.",
+        description="Allow to approve fulfillments which are unpaid." + ADDED_IN_31,
         required=True,
     )
     display_gross_prices = graphene.Boolean(
@@ -233,24 +233,26 @@ class Shop(graphene.ObjectType):
     reserve_stock_duration_anonymous_user = PermissionsField(
         graphene.Int,
         description=(
-            f"{ADDED_IN_31} Default number of minutes stock will be reserved for "
+            "Default number of minutes stock will be reserved for "
             "anonymous checkout or null when stock reservation is disabled."
+            + ADDED_IN_31
         ),
         permissions=[SitePermissions.MANAGE_SETTINGS],
     )
     reserve_stock_duration_authenticated_user = PermissionsField(
         graphene.Int,
         description=(
-            f"{ADDED_IN_31} Default number of minutes stock will be reserved for "
+            "Default number of minutes stock will be reserved for "
             "authenticated checkout or null when stock reservation is disabled."
+            + ADDED_IN_31
         ),
         permissions=[SitePermissions.MANAGE_SETTINGS],
     )
     limit_quantity_per_checkout = PermissionsField(
         graphene.Int,
         description=(
-            f"{ADDED_IN_31} Default number of maximum line quantity in single checkout "
-            f"(per single checkout line). {PREVIEW_FEATURE}"
+            "Default number of maximum line quantity in single checkout "
+            "(per single checkout line)." + ADDED_IN_31 + PREVIEW_FEATURE
         ),
         permissions=[SitePermissions.MANAGE_SETTINGS],
     )
@@ -313,11 +315,13 @@ class Shop(graphene.ObjectType):
         return info.context.plugins.list_external_authentications(active_only=True)
 
     @staticmethod
-    def resolve_available_shipping_methods(_, info, channel, address=None):
-        return resolve_available_shipping_methods(info, channel, address)
+    def resolve_available_shipping_methods(_, info, *, channel, address=None):
+        return resolve_available_shipping_methods(
+            info, channel_slug=channel, address=address
+        )
 
     @staticmethod
-    def resolve_channel_currencies(_, info):
+    def resolve_channel_currencies(_, _info):
         return set(
             channel_models.Channel.objects.values_list("currency_code", flat=True)
         )
@@ -425,8 +429,10 @@ class Shop(graphene.ObjectType):
         return info.context.site.settings.customer_set_password_url
 
     @staticmethod
-    def resolve_translation(_, info, language_code):
-        return resolve_translation(info.context.site.settings, info, language_code)
+    def resolve_translation(_, info, *, language_code):
+        return resolve_translation(
+            info.context.site.settings, info, language_code=language_code
+        )
 
     @staticmethod
     def resolve_automatic_fulfillment_digital_products(_, info):

@@ -40,7 +40,7 @@ from ..attribute.models import (
 from ..attribute.utils import associate_attribute_values_to_instance
 from ..checkout.fetch import fetch_checkout_info, fetch_checkout_lines
 from ..checkout.models import Checkout, CheckoutLine
-from ..checkout.utils import add_variant_to_checkout
+from ..checkout.utils import add_variant_to_checkout, add_voucher_to_checkout
 from ..core import EventDeliveryStatus, JobStatus, TimePeriodType
 from ..core.models import EventDelivery, EventDeliveryAttempt, EventPayload
 from ..core.payments import PaymentInterface
@@ -128,6 +128,7 @@ from ..warehouse.models import (
 )
 from ..webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
 from ..webhook.models import Webhook, WebhookEvent
+from ..webhook.observability import WebhookData
 from .utils import dummy_editorjs
 
 
@@ -310,6 +311,32 @@ def checkout_with_item(checkout, product):
     add_variant_to_checkout(checkout_info, variant, 3)
     checkout.save()
     return checkout
+
+
+@pytest.fixture
+def checkout_with_item_and_voucher_specific_products(
+    checkout_with_item, voucher_specific_product_type
+):
+    manager = get_plugins_manager()
+    lines, _ = fetch_checkout_lines(checkout_with_item)
+    checkout_info = fetch_checkout_info(checkout_with_item, lines, [], manager)
+    add_voucher_to_checkout(
+        manager, checkout_info, lines, voucher_specific_product_type
+    )
+    checkout_with_item.refresh_from_db()
+    return checkout_with_item
+
+
+@pytest.fixture
+def checkout_with_item_and_voucher_once_per_order(checkout_with_item, voucher):
+    voucher.apply_once_per_order = True
+    voucher.save()
+    manager = get_plugins_manager()
+    lines, _ = fetch_checkout_lines(checkout_with_item)
+    checkout_info = fetch_checkout_info(checkout_with_item, lines, [], manager)
+    add_voucher_to_checkout(manager, checkout_info, lines, voucher)
+    checkout_with_item.refresh_from_db()
+    return checkout_with_item
 
 
 @pytest.fixture
@@ -675,6 +702,8 @@ def customer_user(address):  # pylint: disable=W0613
         default_shipping_address=default_address,
         first_name="Leslie",
         last_name="Wade",
+        metadata={"key": "value"},
+        private_metadata={"secret_key": "secret_value"},
     )
     user.addresses.add(default_address)
     user._password = "password"
@@ -781,6 +810,8 @@ def order(customer_user, channel_USD):
         user_email=customer_user.email,
         user=customer_user,
         origin=OrderOrigin.CHECKOUT,
+        metadata={"key": "value"},
+        private_metadata={"secret_key": "secret_value"},
     )
     return order
 
@@ -1753,6 +1784,11 @@ def permission_manage_plugins():
 @pytest.fixture
 def permission_manage_apps():
     return Permission.objects.get(codename="manage_apps")
+
+
+@pytest.fixture
+def permission_manage_observability():
+    return Permission.objects.get(codename="manage_observability")
 
 
 @pytest.fixture
@@ -3061,7 +3097,8 @@ def voucher_percentage(channel_USD):
 
 
 @pytest.fixture
-def voucher_specific_product_type(voucher_percentage):
+def voucher_specific_product_type(voucher_percentage, product):
+    voucher_percentage.products.add(product)
     voucher_percentage.type = VoucherType.SPECIFIC_PRODUCT
     voucher_percentage.save()
     return voucher_percentage
@@ -5034,11 +5071,7 @@ def description_json():
                         "built with GraphQL, Django, and ReactJS."
                     )
                 },
-                "text": (
-                    "A modular, high performance e-commerce storefront "
-                    "built with GraphQL, Django, and ReactJS."
-                ),
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5047,7 +5080,7 @@ def description_json():
                 "key": "",
                 "data": {},
                 "text": "",
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5065,16 +5098,7 @@ def description_json():
                         "open source e-commerce."
                     ),
                 },
-                "text": (
-                    "Saleor is a rapidly-growing open source e-commerce platform "
-                    "that has served high-volume companies from branches "
-                    "like publishing and apparel since 2012. Based on Python "
-                    "and Django, the latest major update introduces a modular "
-                    "front end with a GraphQL API and storefront and dashboard "
-                    "written in React to make Saleor a full-functionality "
-                    "open source e-commerce."
-                ),
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5082,8 +5106,7 @@ def description_json():
             {
                 "key": "",
                 "data": {"text": ""},
-                "text": "",
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5093,8 +5116,7 @@ def description_json():
                 "data": {
                     "text": "Get Saleor today!",
                 },
-                "text": "Get Saleor today!",
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [{"key": 0, "length": 17, "offset": 0}],
                 "inlineStyleRanges": [],
@@ -5133,11 +5155,7 @@ def other_description_json():
                         "top of Python 3 and a Django 2 framework."
                     ),
                 },
-                "text": (
-                    "Saleor is powered by a GraphQL server running on "
-                    "top of Python 3 and a Django 2 framework."
-                ),
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5304,10 +5322,20 @@ def app(db):
 
 
 @pytest.fixture
-def webhook_app(db, permission_manage_shipping, permission_manage_gift_card):
-    app = App.objects.create(name="Sample app objects", is_active=True)
+def webhook_app(
+    db,
+    permission_manage_shipping,
+    permission_manage_gift_card,
+    permission_manage_discounts,
+    permission_manage_menus,
+    permission_manage_products,
+):
+    app = App.objects.create(name="Webhook app", is_active=True)
     app.permissions.add(permission_manage_shipping)
     app.permissions.add(permission_manage_gift_card)
+    app.permissions.add(permission_manage_discounts)
+    app.permissions.add(permission_manage_menus)
+    app.permissions.add(permission_manage_products)
     return app
 
 
@@ -5382,6 +5410,31 @@ def shipping_app(db, permission_manage_shipping):
         ]
     )
     return app
+
+
+@pytest.fixture
+def observability_webhook(db, permission_manage_observability):
+    app = App.objects.create(name="Observability App", is_active=True)
+    app.tokens.create(name="Default")
+    app.permissions.add(permission_manage_observability)
+
+    webhook = Webhook.objects.create(
+        name="observability-webhook-1",
+        app=app,
+        target_url="https://observability-app.com/api/",
+    )
+    webhook.events.create(event_type=WebhookEventAsyncType.OBSERVABILITY)
+    return webhook
+
+
+@pytest.fixture
+def observability_webhook_data(observability_webhook):
+    return WebhookData(
+        id=observability_webhook.id,
+        saleor_domain="mirumee.com",
+        target_url=observability_webhook.target_url,
+        secret_key=observability_webhook.secret_key,
+    )
 
 
 @pytest.fixture

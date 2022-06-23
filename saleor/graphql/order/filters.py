@@ -1,8 +1,10 @@
 from uuid import UUID
 
 import django_filters
+import graphene
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
+from graphql.error import GraphQLError
 
 from ...giftcard import GiftCardEvents
 from ...giftcard.models import GiftCardEvent
@@ -20,12 +22,24 @@ from ..core.utils import from_global_id_or_error
 from ..payment.enums import PaymentChargeStatusEnum
 from ..utils import resolve_global_ids_to_primary_keys
 from ..utils.filters import filter_range_field
-from .enums import OrderStatusFilter
+from .enums import OrderAuthorizeStatusEnum, OrderChargeStatusEnum, OrderStatusFilter
 
 
 def filter_payment_status(qs, _, value):
     if value:
         qs = qs.filter(payments__is_active=True, payments__charge_status__in=value)
+    return qs
+
+
+def filter_authorize_status(qs, _, value):
+    if value:
+        qs = qs.filter(authorize_status__in=value)
+    return qs
+
+
+def filter_charge_status(qs, _, value):
+    if value:
+        qs = qs.filter(charge_status__in=value)
     return qs
 
 
@@ -142,6 +156,12 @@ def filter_order_by_id(qs, _, value):
     return qs.filter(Q(id__in=pks) | (Q(use_old_id=True) & Q(number__in=old_pks)))
 
 
+def filter_by_order_number(qs, _, values):
+    if not values:
+        return qs
+    return qs.filter(number__in=values)
+
+
 class DraftOrderFilter(MetadataFilterBase):
     customer = django_filters.CharFilter(method=filter_customer)
     created = ObjectTypeFilter(input_class=DateRangeInput, method=filter_created_range)
@@ -156,6 +176,12 @@ class DraftOrderFilter(MetadataFilterBase):
 class OrderFilter(DraftOrderFilter):
     payment_status = ListObjectTypeFilter(
         input_class=PaymentChargeStatusEnum, method=filter_payment_status
+    )
+    authorize_status = ListObjectTypeFilter(
+        input_class=OrderAuthorizeStatusEnum, method=filter_authorize_status
+    )
+    charge_status = ListObjectTypeFilter(
+        input_class=OrderChargeStatusEnum, method=filter_charge_status
     )
     status = ListObjectTypeFilter(input_class=OrderStatusFilter, method=filter_status)
     customer = django_filters.CharFilter(method=filter_customer)
@@ -172,7 +198,17 @@ class OrderFilter(DraftOrderFilter):
     ids = GlobalIDMultipleChoiceFilter(method=filter_order_by_id)
     gift_card_used = django_filters.BooleanFilter(method=filter_gift_card_used)
     gift_card_bought = django_filters.BooleanFilter(method=filter_gift_card_bought)
+    numbers = ListObjectTypeFilter(
+        input_class=graphene.String, method=filter_by_order_number
+    )
 
     class Meta:
         model = Order
         fields = ["payment_status", "status", "customer", "created", "search"]
+
+    def is_valid(self):
+        if "ids" in self.data and "numbers" in self.data:
+            raise GraphQLError(
+                message="'ids' and 'numbers` are not allowed to use together in filter."
+            )
+        return super().is_valid()

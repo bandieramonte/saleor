@@ -47,10 +47,11 @@ def check_document_is_single_subscription(document: GraphQLDocument) -> bool:
     return len(subscriptions) == 1
 
 
-def initialize_request() -> HttpRequest:
+def initialize_request(requestor=None) -> HttpRequest:
     """Prepare a request object for webhook subscription.
 
     It creates a dummy request object.
+
     return: HttpRequest
     """
 
@@ -63,6 +64,7 @@ def initialize_request() -> HttpRequest:
         request.META["HTTP_X_FORWARDED_PROTO"] = "https"
         request.META["SERVER_PORT"] = "443"
 
+    request.requestor = requestor  # type: ignore
     return request
 
 
@@ -79,7 +81,7 @@ def generate_payload_from_subscription(
     As an input it expects given event type and object and the query which will be
     used to resolve a payload.
     event_type: is a event which will be triggered.
-    subscribable_object: is a object which have a dedicated own type in Subscription
+    subscribable_object: is an object which have a dedicated own type in Subscription
     definition.
     subscription_query: query used to prepare a payload via graphql engine.
     context: A dummy request used to share context between apps in order to use

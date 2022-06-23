@@ -48,7 +48,7 @@ class ProductChannelListing(ModelObjectType):
         ),
     )
     published_at = graphene.DateTime(
-        description=f"{ADDED_IN_33} The product publication date time."
+        description="The product publication date time." + ADDED_IN_33
     )
     is_published = graphene.Boolean(required=True)
     channel = graphene.Field(Channel, required=True)
@@ -61,7 +61,7 @@ class ProductChannelListing(ModelObjectType):
         ),
     )
     available_for_purchase_at = graphene.DateTime(
-        description=f"{ADDED_IN_33} The product available for purchase date time."
+        description="The product available for purchase date time." + ADDED_IN_33
     )
     discounted_price = graphene.Field(
         Money, description="The price of the cheapest variant (including discounts)."
@@ -102,22 +102,20 @@ class ProductChannelListing(ModelObjectType):
         interfaces = [graphene.relay.Node]
 
     @staticmethod
-    def resolve_publication_date(root: models.ProductChannelListing, info, **_kwargs):
+    def resolve_publication_date(root: models.ProductChannelListing, _info):
         return root.published_at
 
     @staticmethod
-    def resolve_available_for_purchase(
-        root: models.ProductChannelListing, info, **_kwargs
-    ):
+    def resolve_available_for_purchase(root: models.ProductChannelListing, _info):
         return root.available_for_purchase_at
 
     @staticmethod
-    def resolve_channel(root: models.ProductChannelListing, info, **_kwargs):
+    def resolve_channel(root: models.ProductChannelListing, info):
         return ChannelByIdLoader(info.context).load(root.channel_id)
 
     @staticmethod
     @traced_resolver
-    def resolve_purchase_cost(root: models.ProductChannelListing, info, *_kwargs):
+    def resolve_purchase_cost(root: models.ProductChannelListing, info):
         channel = ChannelByIdLoader(info.context).load(root.channel_id)
 
         def calculate_margin_with_variants(variants):
@@ -154,7 +152,7 @@ class ProductChannelListing(ModelObjectType):
 
     @staticmethod
     @traced_resolver
-    def resolve_margin(root: models.ProductChannelListing, info, *_kwargs):
+    def resolve_margin(root: models.ProductChannelListing, info):
         channel = ChannelByIdLoader(info.context).load(root.channel_id)
 
         def calculate_margin_with_variants(variants):
@@ -194,7 +192,7 @@ class ProductChannelListing(ModelObjectType):
         return root.is_available_for_purchase()
 
     @staticmethod
-    def resolve_pricing(root: models.ProductChannelListing, info, address=None):
+    def resolve_pricing(root: models.ProductChannelListing, info, *, address=None):
         context = info.context
 
         address_country = address.country if address is not None else None
@@ -298,7 +296,7 @@ class ProductVariantChannelListing(ModelObjectType):
     preorder_threshold = graphene.Field(
         PreorderThreshold,
         required=False,
-        description=f"{ADDED_IN_31} Preorder variant data. {PREVIEW_FEATURE}",
+        description="Preorder variant data." + ADDED_IN_31 + PREVIEW_FEATURE,
     )
 
     class Meta:
@@ -307,17 +305,15 @@ class ProductVariantChannelListing(ModelObjectType):
         interfaces = [graphene.relay.Node]
 
     @staticmethod
-    def resolve_channel(root: models.ProductVariantChannelListing, info, **_kwargs):
+    def resolve_channel(root: models.ProductVariantChannelListing, info):
         return ChannelByIdLoader(info.context).load(root.channel_id)
 
     @staticmethod
-    def resolve_margin(root: models.ProductVariantChannelListing, *_args):
+    def resolve_margin(root: models.ProductVariantChannelListing, _info):
         return get_margin_for_variant_channel_listing(root)
 
     @staticmethod
-    def resolve_preorder_threshold(
-        root: models.ProductVariantChannelListing, info, **_kwargs
-    ):
+    def resolve_preorder_threshold(root: models.ProductVariantChannelListing, _info):
         # The preorder_quantity_allocated field is added through annotation
         # when using the `resolve_channel_listings` resolver.
         return PreorderThreshold(
@@ -335,7 +331,7 @@ class CollectionChannelListing(ModelObjectType):
         ),
     )
     published_at = graphene.DateTime(
-        description=f"{ADDED_IN_33} The collection publication date."
+        description="The collection publication date." + ADDED_IN_33
     )
     is_published = graphene.Boolean(required=True)
     channel = graphene.Field(Channel, required=True)
@@ -346,9 +342,9 @@ class CollectionChannelListing(ModelObjectType):
         interfaces = [graphene.relay.Node]
 
     @staticmethod
-    def resolve_publication_date(root: models.ProductChannelListing, info, **_kwargs):
+    def resolve_publication_date(root: models.ProductChannelListing, _info):
         return root.published_at
 
     @staticmethod
-    def resolve_channel(root: models.ProductChannelListing, info, **_kwargs):
+    def resolve_channel(root: models.ProductChannelListing, info):
         return ChannelByIdLoader(info.context).load(root.channel_id)

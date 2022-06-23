@@ -46,7 +46,12 @@ from ....warehouse.management import deactivate_preorder_for_variant
 from ...attribute.types import AttributeValueInput
 from ...attribute.utils import AttributeAssignmentMixin, AttrValuesInput
 from ...channel import ChannelContext
-from ...core.descriptions import ADDED_IN_31, DEPRECATED_IN_3X_INPUT, PREVIEW_FEATURE
+from ...core.descriptions import (
+    ADDED_IN_31,
+    DEPRECATED_IN_3X_INPUT,
+    PREVIEW_FEATURE,
+    RICH_CONTENT,
+)
 from ...core.fields import JSONString
 from ...core.inputs import ReorderInput
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
@@ -84,7 +89,7 @@ from ..utils import (
 
 
 class CategoryInput(graphene.InputObjectType):
-    description = JSONString(description="Category description (JSON).")
+    description = JSONString(description="Category description." + RICH_CONTENT)
     name = graphene.String(description="Category name.")
     slug = graphene.String(description="Category slug.")
     seo = SeoInput(description="Search engine optimization fields.")
@@ -208,7 +213,9 @@ class CollectionInput(graphene.InputObjectType):
     )
     name = graphene.String(description="Name of the collection.")
     slug = graphene.String(description="Slug of the collection.")
-    description = JSONString(description="Description of the collection (JSON).")
+    description = JSONString(
+        description="Description of the collection." + RICH_CONTENT
+    )
     background_image = Upload(description="Background image file.")
     background_image_alt = graphene.String(description="Alt text for an image.")
     seo = SeoInput(description="Search engine optimization fields.")
@@ -542,8 +549,10 @@ class ProductInput(graphene.InputObjectType):
         description="List of IDs of collections that the product belongs to.",
         name="collections",
     )
-    description = JSONString(description="Product description (JSON).")
-    longDescription = JSONString(description="Product long description (JSON).")
+    description = JSONString(description="Product description (JSON)." + RICH_CONTENT)
+    longDescription = JSONString(
+        description="Product long description (JSON)." + RICH_CONTENT
+    )
     name = graphene.String(description="Product name.")
     slug = graphene.String(description="Product slug.")
     tax_code = graphene.String(description="Tax rate for enabled tax gateway.")
@@ -828,14 +837,14 @@ class ProductVariantInput(graphene.InputObjectType):
     weight = WeightScalar(description="Weight of the Product Variant.", required=False)
     preorder = PreorderSettingsInput(
         description=(
-            f"{ADDED_IN_31} Determines if variant is in preorder. {PREVIEW_FEATURE}"
+            "Determines if variant is in preorder." + ADDED_IN_31 + PREVIEW_FEATURE
         )
     )
     quantity_limit_per_customer = graphene.Int(
         required=False,
         description=(
-            f"{ADDED_IN_31} Determines maximum quantity of `ProductVariant`,"
-            f"that can be bought in a single checkout. {PREVIEW_FEATURE}"
+            "Determines maximum quantity of `ProductVariant`,"
+            "that can be bought in a single checkout." + ADDED_IN_31 + PREVIEW_FEATURE
         ),
     )
 
@@ -1943,9 +1952,10 @@ class ProductVariantPreorderDeactivate(BaseMutation):
 
     class Meta:
         description = (
-            f"{ADDED_IN_31} Deactivates product variant preorder. "
-            f"It changes all preorder allocation into regular allocation. "
-            f"{PREVIEW_FEATURE}"
+            "Deactivates product variant preorder. "
+            "It changes all preorder allocation into regular allocation."
+            + ADDED_IN_31
+            + PREVIEW_FEATURE
         )
         permissions = (ProductPermissions.MANAGE_PRODUCTS,)
         error_type_class = ProductError

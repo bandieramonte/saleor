@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 import graphene
@@ -28,7 +29,7 @@ from ..core.federation import federated_entity, resolve_federation_references
 from ..core.fields import ConnectionField, PermissionsField
 from ..core.scalars import UUID
 from ..core.types import CountryDisplay, Image, ModelObjectType, NonNullList, Permission
-from ..core.utils import from_global_id_or_error, str_to_enum
+from ..core.utils import from_global_id_or_error, str_to_enum, to_global_id_or_none
 from ..giftcard.dataloaders import GiftCardsByUserLoader
 from ..meta.types import ObjectWithMetadata
 from ..order.dataloaders import OrderLineByIdLoader, OrdersByUserLoader
@@ -123,7 +124,7 @@ class Address(ModelObjectType):
         return False
 
     @staticmethod
-    def __resolve_references(roots: List["Address"], info, **_kwargs):
+    def __resolve_references(roots: List["Address"], info):
         from .resolvers import resolve_addresses
 
         root_ids = [root.id for root in roots]
@@ -197,7 +198,7 @@ class CustomerEvent(ModelObjectType):
     def resolve_order_line(root: models.CustomerEvent, info):
         if "order_line_pk" in root.parameters:
             return OrderLineByIdLoader(info.context).load(
-                root.parameters["order_line_pk"]
+                uuid.UUID(root.parameters["order_line_pk"])
             )
         return None
 
@@ -216,7 +217,7 @@ class UserPermission(Permission):
 
     @staticmethod
     @traced_resolver
-    def resolve_source_permission_groups(root: Permission, _info, user_id, **_kwargs):
+    def resolve_source_permission_groups(root: Permission, _info, user_id):
         _type, user_id = from_global_id_or_error(user_id, only_type="User")
         groups = auth_models.Group.objects.filter(
             user__pk=user_id, permissions__name=root.name
@@ -248,6 +249,14 @@ class User(ModelObjectType):
         channel=graphene.String(
             description="Slug of a channel for which the data should be returned."
         ),
+        deprecation_reason=(f"{DEPRECATED_IN_3X_FIELD} Use `checkoutIds` instead."),
+    )
+    checkout_ids = NonNullList(
+        graphene.ID,
+        description="Returns the checkout ID's assigned to this user.",
+        channel=graphene.String(
+            description="Slug of a channel for which the data should be returned."
+        ),
     )
     gift_cards = ConnectionField(
         "saleor.graphql.giftcard.types.GiftCardCountableConnection",
@@ -262,7 +271,8 @@ class User(ModelObjectType):
         "saleor.graphql.order.types.OrderCountableConnection",
         description=(
             "List of user's orders. Requires one of the following permissions: "
-            f"{AccountPermissions.MANAGE_STAFF}, {AuthorizationFilters.OWNER}"
+            f"{AccountPermissions.MANAGE_STAFF.name}, "
+            f"{AuthorizationFilters.OWNER.name}."
         ),
     )
     user_permissions = NonNullList(
@@ -305,16 +315,16 @@ class User(ModelObjectType):
         model = get_user_model()
 
     @staticmethod
-    def resolve_addresses(root: models.User, _info, **_kwargs):
+    def resolve_addresses(root: models.User, _info):
         return root.addresses.annotate_default(root).all()  # type: ignore
 
     @staticmethod
-    def resolve_checkout(root: models.User, _info, **_kwargs):
+    def resolve_checkout(root: models.User, _info):
         return get_user_checkout(root)
 
     @staticmethod
     @traced_resolver
-    def resolve_checkout_tokens(root: models.User, info, channel=None, **_kwargs):
+    def resolve_checkout_tokens(root: models.User, info, channel=None):
         def return_checkout_tokens(checkouts):
             if not checkouts:
                 return []
@@ -336,6 +346,29 @@ class User(ModelObjectType):
         )
 
     @staticmethod
+    @traced_resolver
+    def resolve_checkout_ids(root: models.User, info, channel=None):
+        def return_checkout_ids(checkouts):
+            if not checkouts:
+                return []
+            checkout_global_ids = []
+            for checkout in checkouts:
+                checkout_global_ids.append(to_global_id_or_none(checkout))
+            return checkout_global_ids
+
+        if not channel:
+            return (
+                CheckoutByUserLoader(info.context)
+                .load(root.id)
+                .then(return_checkout_ids)
+            )
+        return (
+            CheckoutByUserAndChannelLoader(info.context)
+            .load((root.id, channel))
+            .then(return_checkout_ids)
+        )
+
+    @staticmethod
     def resolve_gift_cards(root: models.User, info, **kwargs):
         from ..giftcard.types import GiftCardCountableConnection
 
@@ -349,17 +382,17 @@ class User(ModelObjectType):
         )
 
     @staticmethod
-    def resolve_user_permissions(root: models.User, _info, **_kwargs):
+    def resolve_user_permissions(root: models.User, _info):
         from .resolvers import resolve_permissions
 
         return resolve_permissions(root)
 
     @staticmethod
-    def resolve_permission_groups(root: models.User, _info, **_kwargs):
+    def resolve_permission_groups(root: models.User, _info):
         return root.groups.all()
 
     @staticmethod
-    def resolve_editable_groups(root: models.User, _info, **_kwargs):
+    def resolve_editable_groups(root: models.User, _info):
         return get_groups_which_user_can_manage(root)
 
     @staticmethod
@@ -397,7 +430,7 @@ class User(ModelObjectType):
         return OrdersByUserLoader(info.context).load(root.id).then(_resolve_orders)
 
     @staticmethod
-    def resolve_avatar(root: models.User, info, size=None, **_kwargs):
+    def resolve_avatar(root: models.User, info, size=None):
         if root.avatar:
             return Image.get_adjusted(
                 image=root.avatar,
@@ -416,11 +449,11 @@ class User(ModelObjectType):
         raise PermissionDenied(permissions=[AuthorizationFilters.OWNER])
 
     @staticmethod
-    def resolve_language_code(root, _info, **_kwargs):
+    def resolve_language_code(root, _info):
         return LanguageCodeEnum[str_to_enum(root.language_code)]
 
     @staticmethod
-    def __resolve_references(roots: List["User"], info, **_kwargs):
+    def __resolve_references(roots: List["User"], info):
         from .resolvers import resolve_users
 
         ids = set()
@@ -561,7 +594,7 @@ class Group(ModelObjectType):
         return can_user_manage_group(user, root)
 
     @staticmethod
-    def __resolve_references(roots: List["Group"], info, **_kwargs):
+    def __resolve_references(roots: List["Group"], info):
         from .resolvers import resolve_permission_groups
 
         requestor = get_user_or_app_from_context(info.context)

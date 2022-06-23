@@ -3,7 +3,11 @@ from promise import Promise
 
 from ...checkout import calculations, models
 from ...checkout.utils import get_valid_collection_points_for_checkout
-from ...core.permissions import AccountPermissions
+from ...core.permissions import (
+    AccountPermissions,
+    CheckoutPermissions,
+    PaymentPermissions,
+)
 from ...core.taxes import zero_taxed_money
 from ...core.tracing import traced_resolver
 from ...shipping.interface import ShippingMethodData
@@ -15,14 +19,21 @@ from ..channel import ChannelContext
 from ..channel.dataloaders import ChannelByCheckoutLineIDLoader, ChannelByIdLoader
 from ..channel.types import Channel
 from ..core.connection import CountableConnection
-from ..core.descriptions import ADDED_IN_31, DEPRECATED_IN_3X_FIELD, PREVIEW_FEATURE
+from ..core.descriptions import (
+    ADDED_IN_31,
+    ADDED_IN_34,
+    DEPRECATED_IN_3X_FIELD,
+    PREVIEW_FEATURE,
+)
 from ..core.enums import LanguageCodeEnum
 from ..core.scalars import UUID
 from ..core.types import ModelObjectType, Money, NonNullList, TaxedMoney
 from ..core.utils import str_to_enum
+from ..decorators import one_of_permissions_required
 from ..discount.dataloaders import DiscountsByDateTimeLoader
 from ..giftcard.types import GiftCard
 from ..meta.types import ObjectWithMetadata
+from ..payment.types import TransactionItem
 from ..product.dataloaders import (
     ProductTypeByProductIdLoader,
     ProductTypeByVariantIdLoader,
@@ -37,6 +48,7 @@ from .dataloaders import (
     CheckoutInfoByCheckoutTokenLoader,
     CheckoutLinesByCheckoutTokenLoader,
     CheckoutLinesInfoByCheckoutTokenLoader,
+    TransactionItemsByCheckoutIDLoader,
 )
 
 
@@ -75,9 +87,24 @@ class CheckoutLine(ModelObjectType):
         "saleor.graphql.product.types.ProductVariant", required=True
     )
     quantity = graphene.Int(required=True)
+    unit_price = graphene.Field(
+        TaxedMoney,
+        description="The unit price of the checkout line, with taxes and discounts.",
+        required=True,
+    )
+    undiscounted_unit_price = graphene.Field(
+        Money,
+        description="The unit price of the checkout line, without discounts.",
+        required=True,
+    )
     total_price = graphene.Field(
         TaxedMoney,
         description="The sum of the checkout line price, taxes and discounts.",
+        required=True,
+    )
+    undiscounted_total_price = graphene.Field(
+        Money,
+        description="The sum of the checkout line price, without discounts.",
         required=True,
     )
     requires_shipping = graphene.Boolean(
@@ -97,6 +124,116 @@ class CheckoutLine(ModelObjectType):
 
         return Promise.all([variant, channel]).then(
             lambda data: ChannelContext(node=data[0], channel_slug=data[1].slug)
+        )
+
+    @staticmethod
+    def resolve_unit_price(root, info):
+        # Temporary solution in new tax interface introduced in PR#9526
+        # this value will be denormalized and store in checkout line.
+        def with_checkout(checkout):
+            discounts = DiscountsByDateTimeLoader(info.context).load(
+                info.context.request_time
+            )
+            checkout_info = CheckoutInfoByCheckoutTokenLoader(info.context).load(
+                checkout.token
+            )
+            lines = CheckoutLinesInfoByCheckoutTokenLoader(info.context).load(
+                checkout.token
+            )
+
+            def calculate_line_unit_price(data):
+                (
+                    discounts,
+                    checkout_info,
+                    lines,
+                ) = data
+                for line_info in lines:
+                    if line_info.line.pk == root.pk:
+                        address = (
+                            checkout_info.shipping_address
+                            or checkout_info.billing_address
+                        )
+                        return info.context.plugins.calculate_checkout_line_unit_price(
+                            checkout_info=checkout_info,
+                            lines=lines,
+                            checkout_line_info=line_info,
+                            address=address,
+                            discounts=discounts,
+                        ).price_with_discounts
+                return None
+
+            return Promise.all(
+                [
+                    discounts,
+                    checkout_info,
+                    lines,
+                ]
+            ).then(calculate_line_unit_price)
+
+        return (
+            CheckoutByTokenLoader(info.context)
+            .load(root.checkout_id)
+            .then(with_checkout)
+        )
+
+    @staticmethod
+    def resolve_undiscounted_unit_price(root, info):
+        # Temporary solution in new tax interface introduced in PR#9526
+        # this value will be denormalized and store in checkout line.
+        def with_checkout(checkout):
+            discounts = DiscountsByDateTimeLoader(info.context).load(
+                info.context.request_time
+            )
+            checkout_info = CheckoutInfoByCheckoutTokenLoader(info.context).load(
+                checkout.token
+            )
+            lines = CheckoutLinesInfoByCheckoutTokenLoader(info.context).load(
+                checkout.token
+            )
+
+            def calculate_undiscounted_unit_price(data):
+                (
+                    discounts,
+                    checkout_info,
+                    lines,
+                ) = data
+                for line_info in lines:
+                    if line_info.line.pk == root.pk:
+                        address = (
+                            checkout_info.shipping_address
+                            or checkout_info.billing_address
+                        )
+                        include_taxes_in_prices = (
+                            info.context.site.settings.include_taxes_in_prices
+                        )
+                        undiscounted_price = (
+                            info.context.plugins.calculate_checkout_line_unit_price(
+                                checkout_info=checkout_info,
+                                lines=lines,
+                                checkout_line_info=line_info,
+                                address=address,
+                                discounts=discounts,
+                            ).undiscounted_price
+                        )
+                        return (
+                            undiscounted_price.gross
+                            if include_taxes_in_prices
+                            else undiscounted_price.net
+                        )
+                return None
+
+            return Promise.all(
+                [
+                    discounts,
+                    checkout_info,
+                    lines,
+                ]
+            ).then(calculate_undiscounted_unit_price)
+
+        return (
+            CheckoutByTokenLoader(info.context)
+            .load(root.checkout_id)
+            .then(with_checkout)
         )
 
     @staticmethod
@@ -149,6 +286,66 @@ class CheckoutLine(ModelObjectType):
         )
 
     @staticmethod
+    def resolve_undiscounted_total_price(root, info):
+        # Temporary solution in new tax interface introduced in PR#9526
+        # this value will be denormalized and store in checkout line.
+        def with_checkout(checkout):
+            discounts = DiscountsByDateTimeLoader(info.context).load(
+                info.context.request_time
+            )
+            checkout_info = CheckoutInfoByCheckoutTokenLoader(info.context).load(
+                checkout.token
+            )
+            lines = CheckoutLinesInfoByCheckoutTokenLoader(info.context).load(
+                checkout.token
+            )
+
+            def calculate_undiscounted_total_price(data):
+                (
+                    discounts,
+                    checkout_info,
+                    lines,
+                ) = data
+                for line_info in lines:
+                    if line_info.line.pk == root.pk:
+                        address = (
+                            checkout_info.shipping_address
+                            or checkout_info.billing_address
+                        )
+                        include_taxes_in_prices = (
+                            info.context.site.settings.include_taxes_in_prices
+                        )
+                        undiscounted_price = (
+                            info.context.plugins.calculate_checkout_line_total(
+                                checkout_info=checkout_info,
+                                lines=lines,
+                                checkout_line_info=line_info,
+                                address=address,
+                                discounts=discounts,
+                            ).undiscounted_price
+                        )
+                        return (
+                            undiscounted_price.gross
+                            if include_taxes_in_prices
+                            else undiscounted_price.net
+                        )
+                return None
+
+            return Promise.all(
+                [
+                    discounts,
+                    checkout_info,
+                    lines,
+                ]
+            ).then(calculate_undiscounted_total_price)
+
+        return (
+            CheckoutByTokenLoader(info.context)
+            .load(root.checkout_id)
+            .then(with_checkout)
+        )
+
+    @staticmethod
     def resolve_requires_shipping(root: models.CheckoutLine, info):
         def is_shipping_required(product_type):
             return product_type.is_shipping_required
@@ -168,9 +365,9 @@ class CheckoutLineCountableConnection(CountableConnection):
 class DeliveryMethod(graphene.Union):
     class Meta:
         description = (
-            f"{ADDED_IN_31} Represents a delivery method chosen for the checkout. "
+            "Represents a delivery method chosen for the checkout. "
             '`Warehouse` type is used when checkout is marked as "click and collect" '
-            f"and `ShippingMethod` otherwise. {PREVIEW_FEATURE}"
+            "and `ShippingMethod` otherwise." + ADDED_IN_31 + PREVIEW_FEATURE
         )
         types = (Warehouse, ShippingMethod)
 
@@ -212,8 +409,9 @@ class Checkout(ModelObjectType):
         Warehouse,
         required=True,
         description=(
-            f"{ADDED_IN_31} Collection points that can be used for this order. "
-            f"{PREVIEW_FEATURE}"
+            "Collection points that can be used for this order."
+            + ADDED_IN_31
+            + PREVIEW_FEATURE
         ),
     )
     available_payment_gateways = NonNullList(
@@ -233,8 +431,8 @@ class Checkout(ModelObjectType):
     quantity = graphene.Int(description="The number of items purchased.", required=True)
     stock_reservation_expires = graphene.DateTime(
         description=(
-            f"{ADDED_IN_31} Date when oldest stock reservation for this checkout "
-            " expires or null if no stock is reserved."
+            "Date when oldest stock reservation for this checkout "
+            "expires or null if no stock is reserved." + ADDED_IN_31
         ),
     )
     lines = NonNullList(
@@ -259,8 +457,9 @@ class Checkout(ModelObjectType):
     delivery_method = graphene.Field(
         DeliveryMethod,
         description=(
-            f"{ADDED_IN_31} The delivery method selected for this checkout. "
-            f"{PREVIEW_FEATURE}"
+            "The delivery method selected for this checkout."
+            + ADDED_IN_31
+            + PREVIEW_FEATURE
         ),
     )
 
@@ -280,6 +479,16 @@ class Checkout(ModelObjectType):
     )
     language_code = graphene.Field(
         LanguageCodeEnum, description="Checkout language code.", required=True
+    )
+
+    transactions = NonNullList(
+        TransactionItem,
+        description=(
+            "List of transactions for the checkout. Requires one of the "
+            "following permissions: MANAGE_CHECKOUTS, HANDLE_PAYMENTS."
+            + ADDED_IN_34
+            + PREVIEW_FEATURE
+        ),
     )
 
     class Meta:
@@ -524,7 +733,7 @@ class Checkout(ModelObjectType):
         )
 
     @staticmethod
-    def resolve_language_code(root, _info, **_kwargs):
+    def resolve_language_code(root, _info):
         return LanguageCodeEnum[str_to_enum(root.language_code)]
 
     @staticmethod
@@ -544,6 +753,13 @@ class Checkout(ModelObjectType):
             .load(root.token)
             .then(get_oldest_stock_reservation_expiration_date)
         )
+
+    @staticmethod
+    @one_of_permissions_required(
+        [CheckoutPermissions.MANAGE_CHECKOUTS, PaymentPermissions.HANDLE_PAYMENTS]
+    )
+    def resolve_transactions(root: models.Checkout, info):
+        return TransactionItemsByCheckoutIDLoader(info.context).load(root.pk)
 
 
 class CheckoutCountableConnection(CountableConnection):
