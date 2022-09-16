@@ -1,4 +1,5 @@
 from typing import Collection, Union
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.models import _user_has_perm  # type: ignore
@@ -19,7 +20,6 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django_countries.fields import Country, CountryField
 from phonenumber_field.modelfields import PhoneNumber, PhoneNumberField
-from versatileimagefield.fields import VersatileImageField
 
 from ..app.models import App
 from ..core.models import ModelWithMetadata
@@ -179,12 +179,13 @@ class User(PermissionsMixin, ModelWithMetadata, AbstractBaseUser):
     default_billing_address = models.ForeignKey(
         Address, related_name="+", null=True, blank=True, on_delete=models.SET_NULL
     )
-    avatar = VersatileImageField(upload_to="user-avatars", blank=True, null=True)
+    avatar = models.ImageField(upload_to="user-avatars", blank=True, null=True)
     jwt_token_key = models.CharField(max_length=12, default=get_random_string)
     language_code = models.CharField(
         max_length=35, choices=settings.LANGUAGES, default=settings.LANGUAGE_CODE
     )
     search_document = models.TextField(blank=True, default="")
+    uuid = models.UUIDField(default=uuid4, unique=True)
 
     USERNAME_FIELD = "email"
 

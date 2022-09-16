@@ -58,7 +58,6 @@ from .notifications import (
 )
 from .utils import (
     order_line_needs_automatic_fulfillment,
-    recalculate_order,
     restock_fulfillment_lines,
     update_order_authorize_data,
     update_order_charge_data,
@@ -85,6 +84,7 @@ def order_created(
     app: Optional["App"],
     manager: "PluginsManager",
     from_draft: bool = False,
+    site_settings: Optional["SiteSettings"] = None,
 ):
     order = order_info.order
     events.order_created_event(order=order, user=user, app=app, from_draft=from_draft)
@@ -99,6 +99,7 @@ def order_created(
                 amount=payment.total,
                 payment=payment,
                 manager=manager,
+                site_settings=site_settings,
             )
         elif order.is_pre_authorized():
             order_authorized(
@@ -136,7 +137,10 @@ def handle_fully_paid_order(
     order_info: "OrderInfo",
     user: Optional["User"] = None,
     app: Optional["App"] = None,
+    site_settings: Optional["SiteSettings"] = None,
 ):
+    from ..giftcard.utils import fulfill_non_shippable_gift_cards
+
     order = order_info.order
     events.order_fully_paid_event(order=order, user=user, app=app)
     if order_info.customer_email:
@@ -148,6 +152,16 @@ def handle_fully_paid_order(
     except Exception:
         # Analytics failing should not abort the checkout flow
         logger.exception("Recording order in analytics failed")
+
+    if site_settings is None:
+        site_settings = Site.objects.get_current().settings
+
+    if site_settings.automatically_fulfill_non_shippable_gift_card:
+        order_lines = [line.line for line in order_info.lines_data]
+        fulfill_non_shippable_gift_cards(
+            order, order_lines, site_settings, user, app, manager
+        )
+
     manager.order_fully_paid(order)
     manager.order_updated(order)
 
@@ -172,7 +186,9 @@ def cancel_order(
     transaction.on_commit(lambda: manager.order_cancelled(order))
     transaction.on_commit(lambda: manager.order_updated(order))
 
-    send_order_canceled_confirmation(order, user, app, manager)
+    transaction.on_commit(
+        lambda: send_order_canceled_confirmation(order, user, app, manager)
+    )
 
 
 def order_refunded(
@@ -275,7 +291,6 @@ def order_awaits_fulfillment_approval(
 
 
 def order_shipping_updated(order: "Order", manager: "PluginsManager"):
-    recalculate_order(order)
     manager.order_updated(order)
 
 
@@ -300,6 +315,7 @@ def order_captured(
     amount: "Decimal",
     payment: "Payment",
     manager: "PluginsManager",
+    site_settings: Optional["SiteSettings"] = None,
 ):
     order = order_info.order
     events.payment_captured_event(
@@ -307,7 +323,7 @@ def order_captured(
     )
     manager.order_updated(order)
     if order.is_fully_paid():
-        handle_fully_paid_order(manager, order_info, user, app)
+        handle_fully_paid_order(manager, order_info, user, app, site_settings)
 
 
 def fulfillment_tracking_updated(
@@ -656,7 +672,7 @@ def _create_fulfillment_lines(
     lines = [line_data["order_line"] for line_data in lines_data]
     variants = [line.variant for line in lines]
     stocks = (
-        Stock.objects.for_channel(channel_slug)
+        Stock.objects.for_channel_and_country(channel_slug)
         .filter(warehouse_id=warehouse_pk, product_variant__in=variants)
         .select_related("product_variant")
     )
@@ -738,6 +754,7 @@ def create_fulfillments(
     notify_customer: bool = True,
     approved: bool = True,
     allow_stock_to_be_exceeded: bool = False,
+    tracking_number: Optional[str] = "",
 ) -> List[Fulfillment]:
     """Fulfill order.
 
@@ -767,6 +784,7 @@ def create_fulfillments(
             otherwise waiting_for_approval.
         allow_stock_to_be_exceeded (bool): If `True` then stock quantity could exceed.
             Default value is set to `False`.
+        tracking_number (str): Optional fulfillment tracking number.
 
     Return:
         List[Fulfillment]: Fulfillmet with lines created for this order
@@ -786,7 +804,9 @@ def create_fulfillments(
         else FulfillmentStatus.WAITING_FOR_APPROVAL
     )
     for warehouse_pk in fulfillment_lines_for_warehouses:
-        fulfillment = Fulfillment.objects.create(order=order, status=status)
+        fulfillment = Fulfillment.objects.create(
+            order=order, status=status, tracking_number=tracking_number
+        )
         fulfillments.append(fulfillment)
         fulfillment_lines.extend(
             _create_fulfillment_lines(
@@ -800,6 +820,8 @@ def create_fulfillments(
                 allow_stock_to_be_exceeded=allow_stock_to_be_exceeded,
             )
         )
+        if tracking_number:
+            transaction.on_commit(lambda: manager.tracking_number_updated(fulfillment))
 
     FulfillmentLine.objects.bulk_create(fulfillment_lines)
     order.refresh_from_db()
@@ -1124,17 +1146,15 @@ def create_replace_order(
         order_line.quantity_fulfilled = 0
         order_line_to_create[order_line_id] = order_line
 
-    lines_to_create = order_line_to_create.values()
+    lines_to_create = list(order_line_to_create.values())
     OrderLine.objects.bulk_create(lines_to_create)
-
-    recalculate_order(replace_order)
 
     draft_order_created_from_replace_event(
         draft_order=replace_order,
         original_order=original_order,
         user=user,
         app=app,
-        lines=[(line.quantity, line) for line in lines_to_create],
+        lines=lines_to_create,
     )
     return replace_order
 
@@ -1303,12 +1323,11 @@ def process_replace(
         order_lines_to_replace=order_lines,
         fulfillment_lines_to_replace=fulfillment_lines,
     )
-    replaced_lines = [(line.quantity, line) for line in new_order.lines.all()]
     fulfillment_replaced_event(
         order=order,
         user=user,
         app=app,
-        replaced_lines=replaced_lines,
+        replaced_lines=list(new_order.lines.all()),
     )
     order_replacement_created(
         original_order=order,

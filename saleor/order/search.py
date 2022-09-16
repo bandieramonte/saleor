@@ -1,23 +1,30 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import graphene
-from django.db.models import Q, prefetch_related_objects
+from django.conf import settings
+from django.contrib.postgres.search import SearchQuery, SearchRank
+from django.db.models import F, Q, Value, prefetch_related_objects
 
-from ..account.search import (
-    generate_address_search_document_value,
-    generate_user_fields_search_document_value,
-)
+from ..account.search import generate_address_search_vector_value
+from ..core.postgres import FlatConcatSearchVector, NoValidationSearchVector
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
     from .models import Order
 
 
-def update_order_search_document(order: "Order"):
-    order.search_document = prepare_order_search_document_value(order)
-    order.save(update_fields=["search_document", "updated_at"])
+def update_order_search_vector(order: "Order", *, save: bool = True):
+    order.search_vector = FlatConcatSearchVector(
+        *prepare_order_search_vector_value(order)
+    )
+    if save:
+        order.save(update_fields=["search_vector", "updated_at"])
 
 
-def prepare_order_search_document_value(order: "Order", *, already_prefetched=False):
+def prepare_order_search_vector_value(
+    order: "Order", *, already_prefetched=False
+) -> List[NoValidationSearchVector]:
     if not already_prefetched:
         prefetch_related_objects(
             [order],
@@ -28,56 +35,151 @@ def prepare_order_search_document_value(order: "Order", *, already_prefetched=Fa
             "discounts",
             "lines",
         )
-    search_document = f"#{str(order.number)}\n"
-    user_data = order.user_email + "\n"
-    if user := order.user:
-        user_data += generate_user_fields_search_document_value(user)
-    search_document += user_data
+    search_vectors = [
+        NoValidationSearchVector(Value(str(order.number)), config="simple", weight="A")
+    ]
+    if order.user_email:
+        search_vectors.append(
+            NoValidationSearchVector(
+                Value(order.user_email), config="simple", weight="A"
+            )
+        )
+    if order.user:
+        search_vectors.append(
+            NoValidationSearchVector(
+                Value(order.user.email), config="simple", weight="A"
+            )
+        )
+        if order.user.first_name:
+            search_vectors.append(
+                NoValidationSearchVector(
+                    Value(order.user.first_name), config="simple", weight="A"
+                )
+            )
+        if order.user.last_name:
+            search_vectors.append(
+                NoValidationSearchVector(
+                    Value(order.user.last_name), config="simple", weight="A"
+                )
+            )
 
-    for address_field in ["billing_address", "shipping_address"]:
-        if address := getattr(order, address_field):
-            search_document += generate_address_search_document_value(address)
+    if order.billing_address:
+        search_vectors += generate_address_search_vector_value(
+            order.billing_address, weight="B"
+        )
+    if order.shipping_address:
+        search_vectors += generate_address_search_vector_value(
+            order.shipping_address, weight="B"
+        )
 
-    search_document += generate_order_payments_search_document_value(order)
-
-    search_document += generate_order_discounts_search_document_value(order)
-
-    search_document += generate_order_lines_search_document_value(order)
-
-    return search_document.lower()
-
-
-def generate_order_payments_search_document_value(order: "Order"):
-    payments_data = ""
-    for payment in order.payments.all():
-        payments_data += graphene.Node.to_global_id("Payment", payment.id) + "\n"
-        if psp_reference := payment.psp_reference:
-            payments_data += psp_reference + "\n"
-    return payments_data
-
-
-def generate_order_discounts_search_document_value(order: "Order"):
-    discount_data = ""
-    for discount in order.discounts.all():
-        for field in ["name", "translated_name"]:
-            if value := getattr(discount, field):
-                discount_data += value + "\n"
-    return discount_data
-
-
-def generate_order_lines_search_document_value(order: "Order"):
-    lines_data = "\n".join(
-        [line.product_sku for line in order.lines.all() if line.product_sku]
-    )
-    if lines_data:
-        lines_data += "\n"
-    return lines_data
+    search_vectors += generate_order_payments_search_vector_value(order)
+    search_vectors += generate_order_discounts_search_vector_value(order)
+    search_vectors += generate_order_lines_search_vector_value(order)
+    return search_vectors
 
 
-def search_orders(qs, value):
+def generate_order_payments_search_vector_value(
+    order: "Order",
+) -> List[NoValidationSearchVector]:
+    payment_vectors = []
+    for payment in order.payments.all()[: settings.SEARCH_ORDERS_MAX_INDEXED_PAYMENTS]:
+        payment_vectors.append(
+            NoValidationSearchVector(
+                Value(graphene.Node.to_global_id("Payment", payment.id)),
+                config="simple",
+                weight="D",
+            )
+        )
+        if payment.psp_reference:
+            payment_vectors.append(
+                NoValidationSearchVector(
+                    Value(payment.psp_reference),
+                    config="simple",
+                    weight="D",
+                )
+            )
+    return payment_vectors
+
+
+def generate_order_discounts_search_vector_value(
+    order: "Order",
+) -> List[NoValidationSearchVector]:
+    discount_vectors = []
+    for discount in order.discounts.all()[
+        : settings.SEARCH_ORDERS_MAX_INDEXED_DISCOUNTS
+    ]:
+        if discount.name:
+            discount_vectors.append(
+                NoValidationSearchVector(
+                    Value(discount.name),
+                    config="simple",
+                    weight="D",
+                )
+            )
+        if discount.translated_name:
+            discount_vectors.append(
+                NoValidationSearchVector(
+                    Value(discount.translated_name),
+                    config="simple",
+                    weight="D",
+                )
+            )
+    return discount_vectors
+
+
+def generate_order_lines_search_vector_value(
+    order: "Order",
+) -> List[NoValidationSearchVector]:
+    line_vectors = []
+    for line in order.lines.all()[: settings.SEARCH_ORDERS_MAX_INDEXED_LINES]:
+        if line.product_sku:
+            line_vectors.append(
+                NoValidationSearchVector(
+                    Value(line.product_sku),
+                    config="simple",
+                    weight="C",
+                )
+            )
+        if line.product_name:
+            line_vectors.append(
+                NoValidationSearchVector(
+                    Value(line.product_name),
+                    config="simple",
+                    weight="C",
+                )
+            )
+        if line.variant_name:
+            line_vectors.append(
+                NoValidationSearchVector(
+                    Value(line.variant_name),
+                    config="simple",
+                    weight="C",
+                )
+            )
+        if line.translated_product_name:
+            line_vectors.append(
+                NoValidationSearchVector(
+                    Value(line.translated_product_name),
+                    config="simple",
+                    weight="C",
+                )
+            )
+        if line.translated_variant_name:
+            line_vectors.append(
+                NoValidationSearchVector(
+                    Value(line.translated_variant_name),
+                    config="simple",
+                    weight="C",
+                )
+            )
+    return line_vectors
+
+
+def search_orders(qs: "QuerySet[Order]", value) -> "QuerySet[Order]":
     if value:
-        lookup = Q()
-        for val in value.split():
-            lookup &= Q(search_document__ilike=val)
-        qs = qs.filter(lookup)
+        query = SearchQuery(value, search_type="websearch", config="simple")
+        lookup = Q(search_vector=query)
+        qs = qs.filter(lookup).annotate(
+            search_rank=SearchRank(F("search_vector"), query)
+        )
     return qs

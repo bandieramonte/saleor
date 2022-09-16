@@ -3,6 +3,7 @@ import jwt
 from django.conf import settings
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
 from ....account import events as account_events
 from ....account import models, notifications, search, utils
@@ -16,7 +17,6 @@ from ....core.tracing import traced_atomic_transaction
 from ....core.utils.url import validate_storefront_url
 from ....giftcard.utils import assign_user_gift_cards
 from ....order.utils import match_orders_with_new_user
-from ....settings import JWT_TTL_REQUEST_EMAIL_CHANGE
 from ...channel.utils import clean_channel
 from ...core.enums import LanguageCodeEnum
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
@@ -328,9 +328,18 @@ class AccountAddressCreate(ModelMutation, I18nMixin):
         user = info.context.user
         remove_the_oldest_user_address_if_address_limit_is_reached(user)
         instance.user_addresses.add(user)
-        info.context.plugins.customer_updated(user)
         user.search_document = search.prepare_user_search_document_value(user)
         user.save(update_fields=["search_document", "updated_at"])
+        transaction.on_commit(
+            lambda: cls.trigger_post_account_address_create_webhooks(
+                info, instance, user
+            )
+        )
+
+    @classmethod
+    def trigger_post_account_address_create_webhooks(cls, info, address, user):
+        info.context.plugins.customer_updated(user)
+        info.context.plugins.address_created(address)
 
 
 class AccountAddressUpdate(BaseAddressUpdate):
@@ -467,7 +476,7 @@ class RequestEmailChange(BaseMutation):
             "new_email": new_email,
             "user_pk": user.pk,
         }
-        token = create_token(token_payload, JWT_TTL_REQUEST_EMAIL_CHANGE)
+        token = create_token(token_payload, settings.JWT_TTL_REQUEST_EMAIL_CHANGE)
         notifications.send_request_user_change_email_notification(
             redirect_url,
             user,

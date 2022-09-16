@@ -2,7 +2,8 @@ import json
 import uuid
 from collections import defaultdict
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, Optional, Set
 
 import graphene
 from django.contrib.auth.models import AnonymousUser
@@ -13,8 +14,11 @@ from graphene.utils.str_converters import to_camel_case
 from .. import __version__
 from ..account.models import User
 from ..attribute.models import AttributeValueTranslation
+from ..checkout import base_calculations
+from ..checkout.fetch import CheckoutInfo, CheckoutLineInfo
 from ..checkout.models import Checkout
 from ..core.prices import quantize_price, quantize_price_fields
+from ..core.taxes import include_taxes_in_prices
 from ..core.utils import build_absolute_uri
 from ..core.utils.anonymization import (
     anonymize_checkout,
@@ -22,6 +26,7 @@ from ..core.utils.anonymization import (
     generate_fake_user,
 )
 from ..core.utils.json_serializer import CustomJsonEncoder
+from ..discount import VoucherType
 from ..discount.utils import fetch_active_discounts
 from ..order import FulfillmentStatus, OrderStatus
 from ..order.models import Fulfillment, FulfillmentLine, Order, OrderLine
@@ -38,8 +43,10 @@ from .event_types import WebhookEventAsyncType
 from .payload_serializers import PayloadSerializer
 from .serializers import (
     serialize_checkout_lines,
+    serialize_checkout_lines_for_tax_calculation,
     serialize_product_or_variant_attributes,
 )
+from .utils import get_base_price
 
 if TYPE_CHECKING:
     # pylint: disable=unused-import
@@ -48,7 +55,6 @@ if TYPE_CHECKING:
 
 if TYPE_CHECKING:
     from ..discount.models import Sale
-    from ..graphql.discount.mutations import NodeCatalogueInfo
     from ..invoice.models import Invoice
     from ..payment.interface import PaymentData, TransactionActionData
     from ..payment.models import Payment
@@ -69,6 +75,8 @@ ADDRESS_FIELDS = (
     "country_area",
     "phone",
 )
+
+CHANNEL_FIELDS = ("slug", "currency_code")
 
 ORDER_FIELDS = (
     "status",
@@ -260,8 +268,6 @@ def generate_order_payload(
     )
     discount_price_fields = ("amount_value",)
 
-    channel_fields = ("slug", "currency_code")
-
     lines = order.lines.all()
     fulfillments = order.fulfillments.all()
     payments = order.payments.all()
@@ -314,7 +320,7 @@ def generate_order_payload(
         [order],
         fields=ORDER_FIELDS,
         additional_fields={
-            "channel": (lambda o: o.channel, channel_fields),
+            "channel": (lambda o: o.channel, CHANNEL_FIELDS),
             "shipping_address": (lambda o: o.shipping_address, ADDRESS_FIELDS),
             "billing_address": (lambda o: o.billing_address, ADDRESS_FIELDS),
             "discounts": (lambda _: discounts, discount_fields),
@@ -360,16 +366,16 @@ def _generate_order_payment_payload(payments: Iterable["Payment"]):
 
 
 def _calculate_added(
-    previous_catalogue: "NodeCatalogueInfo",
-    current_catalogue: "NodeCatalogueInfo",
+    previous_catalogue: DefaultDict[str, Set[str]],
+    current_catalogue: DefaultDict[str, Set[str]],
     key: str,
 ) -> List[str]:
     return list(current_catalogue[key] - previous_catalogue[key])
 
 
 def _calculate_removed(
-    previous_catalogue: "NodeCatalogueInfo",
-    current_catalogue: "NodeCatalogueInfo",
+    previous_catalogue: DefaultDict[str, Set[str]],
+    current_catalogue: DefaultDict[str, Set[str]],
     key: str,
 ) -> List[str]:
     return _calculate_added(current_catalogue, previous_catalogue, key)
@@ -378,8 +384,8 @@ def _calculate_removed(
 @traced_payload_generator
 def generate_sale_payload(
     sale: "Sale",
-    previous_catalogue: Optional["NodeCatalogueInfo"] = None,
-    current_catalogue: Optional["NodeCatalogueInfo"] = None,
+    previous_catalogue: Optional[DefaultDict[str, Set[str]]] = None,
+    current_catalogue: Optional[DefaultDict[str, Set[str]]] = None,
     requestor: Optional["RequestorOrLazyObject"] = None,
 ):
     if previous_catalogue is None:
@@ -420,6 +426,28 @@ def generate_sale_payload(
                 previous_catalogue, current_catalogue, "variants"
             ),
         },
+    )
+
+
+@traced_payload_generator
+def generate_sale_toggle_payload(
+    sale: "Sale",
+    catalogue: DefaultDict[str, Set[str]],
+    requestor: Optional["RequestorOrLazyObject"] = None,
+):
+    serializer = PayloadSerializer()
+    sale_fields = ("id",)
+
+    extra_dict_data = {key: list(ids) for key, ids in catalogue.items()}
+    extra_dict_data["meta"] = generate_meta(
+        requestor_data=generate_requestor(requestor)
+    )
+    extra_dict_data["is_active"] = sale.is_active()
+
+    return serializer.serialize(
+        [sale],
+        fields=sale_fields,
+        extra_dict_data=extra_dict_data,
     )
 
 
@@ -484,7 +512,6 @@ def generate_checkout_payload(
     checkout_price_fields = ("discount_amount",)
     quantize_price_fields(checkout, checkout_price_fields, checkout.currency)
     user_fields = ("email", "first_name", "last_name")
-    channel_fields = ("slug", "currency_code")
 
     discounts = fetch_active_discounts()
     lines_dict_data = serialize_checkout_lines(checkout, discounts)
@@ -492,16 +519,16 @@ def generate_checkout_payload(
     # todo use the most appropriate warehouse
     warehouse = None
     if checkout.shipping_address:
-        warehouse = Warehouse.objects.for_country(
-            checkout.shipping_address.country.code
+        warehouse = Warehouse.objects.for_country_and_channel(
+            checkout.shipping_address.country.code, checkout.channel_id
         ).first()
 
     checkout_data = serializer.serialize(
         [checkout],
         fields=checkout_fields,
-        obj_id_name="token",
+        pk_field_name="token",
         additional_fields={
-            "channel": (lambda o: o.channel, channel_fields),
+            "channel": (lambda o: o.channel, CHANNEL_FIELDS),
             "user": (lambda c: c.user, user_fields),
             "billing_address": (lambda c: c.billing_address, ADDRESS_FIELDS),
             "shipping_address": (lambda c: c.shipping_address, ADDRESS_FIELDS),
@@ -523,6 +550,9 @@ def generate_checkout_payload(
             else None,
             "meta": generate_meta(requestor_data=generate_requestor(requestor)),
             "created": checkout.created_at,
+            # We add token as a graphql ID as it worked in that way since we introduce
+            # a checkout payload
+            "token": graphene.Node.to_global_id("Checkout", checkout.token),
         },
     )
     return checkout_data
@@ -880,7 +910,9 @@ def generate_fulfillment_payload(
     if fulfillment_line and fulfillment_line.stock:
         warehouse = fulfillment_line.stock.warehouse
     else:
-        warehouse = Warehouse.objects.for_country(order_country).first()
+        warehouse = Warehouse.objects.for_country_and_channel(
+            order_country, order.channel_id
+        ).first()
     fulfillment_data = serializer.serialize(
         [fulfillment],
         fields=fulfillment_fields,
@@ -1117,10 +1149,10 @@ def generate_excluded_shipping_methods_for_order_payload(
 
 @traced_payload_generator
 def generate_excluded_shipping_methods_for_checkout_payload(
-    checkout: "Checkout",
+    checkout_info: "CheckoutInfo",
     available_shipping_methods: List[ShippingMethodData],
 ):
-    checkout_data = json.loads(generate_checkout_payload(checkout))[0]
+    checkout_data = json.loads(generate_checkout_payload(checkout_info.checkout))[0]
     payload = {
         "checkout": checkout_data,
         "shipping_methods": [
@@ -1129,6 +1161,181 @@ def generate_excluded_shipping_methods_for_checkout_payload(
         ],
     }
     return json.dumps(payload, cls=CustomJsonEncoder)
+
+
+@traced_payload_generator
+def generate_checkout_payload_for_tax_calculation(
+    checkout_info: "CheckoutInfo",
+    lines: Iterable["CheckoutLineInfo"],
+):
+    checkout = checkout_info.checkout
+    included_taxes_in_prices = include_taxes_in_prices()
+    discount_infos = fetch_active_discounts()
+
+    serializer = PayloadSerializer()
+
+    checkout_fields = (
+        "currency",
+        "metadata",
+    )
+
+    # Prepare checkout data
+    address = checkout_info.shipping_address or checkout_info.billing_address
+
+    total_amount = quantize_price(
+        base_calculations.base_checkout_total(
+            checkout_info, discount_infos, lines
+        ).amount,
+        checkout.currency,
+    )
+
+    # Prepare user data
+    user = checkout_info.user
+    user_id = None
+    user_public_metadata = {}
+    if user:
+        user_id = graphene.Node.to_global_id("User", user.id)
+        user_public_metadata = user.metadata
+
+    # Prepare discount data
+    is_shipping_voucher = (
+        checkout_info.voucher.type == VoucherType.SHIPPING
+        if checkout_info.voucher
+        else False
+    )
+    discount_amount = quantize_price(checkout.discount_amount, checkout.currency)
+    discount_name = checkout.discount_name
+    discounts = (
+        [{"name": discount_name, "amount": discount_amount}]
+        if discount_amount and not is_shipping_voucher
+        else []
+    )
+
+    # Prepare shipping data
+    shipping_method = checkout.shipping_method
+    shipping_method_name = None
+    if shipping_method:
+        shipping_method_name = shipping_method.name
+    shipping_method_amount = quantize_price(
+        base_calculations.base_checkout_delivery_price(checkout_info, lines).amount,
+        checkout.currency,
+    )
+    if is_shipping_voucher:
+        shipping_method_amount = max(
+            shipping_method_amount - discount_amount, Decimal("0.0")
+        )
+
+    # Prepare line data
+    lines_dict_data = serialize_checkout_lines_for_tax_calculation(
+        checkout_info, lines, discount_infos
+    )
+
+    checkout_data = serializer.serialize(
+        [checkout],
+        fields=checkout_fields,
+        pk_field_name="token",
+        additional_fields={
+            "channel": (lambda c: c.channel, CHANNEL_FIELDS),
+            "address": (lambda _: address, ADDRESS_FIELDS),
+        },
+        extra_dict_data={
+            "user_id": user_id,
+            "user_public_metadata": user_public_metadata,
+            "included_taxes_in_prices": included_taxes_in_prices,
+            "total_amount": total_amount,
+            "shipping_amount": shipping_method_amount,
+            "shipping_name": shipping_method_name,
+            "discounts": discounts,
+            "lines": lines_dict_data,
+        },
+    )
+    return checkout_data
+
+
+def _generate_order_lines_payload_for_tax_calculation(lines: Iterable[OrderLine]):
+
+    serializer = PayloadSerializer()
+    return serializer.serialize(
+        lines,
+        fields=("product_name", "variant_name", "quantity"),
+        extra_dict_data={
+            "variant_id": (lambda l: l.product_variant_id),
+            "full_name": (lambda l: l.variant.display_product() if l.variant else None),
+            "product_metadata": (
+                lambda l: l.variant.product.metadata if l.variant else {}
+            ),
+            "product_type_metadata": (
+                lambda l: l.variant.product.product_type.metadata if l.variant else {}
+            ),
+            "charge_taxes": (
+                lambda l: l.variant.product.charge_taxes if l.variant else None
+            ),
+            "sku": (lambda l: l.product_sku),
+            "unit_amount": (
+                lambda l: quantize_price(l.base_unit_price_amount, l.currency)
+            ),
+            "total_amount": (
+                lambda l: quantize_price(
+                    l.base_unit_price_amount * l.quantity, l.currency
+                )
+            ),
+        },
+    )
+
+
+@traced_payload_generator
+def generate_order_payload_for_tax_calculation(order: "Order"):
+    serializer = PayloadSerializer()
+    included_taxes_in_prices = include_taxes_in_prices()
+
+    # Prepare Order data
+    address = order.shipping_address or order.billing_address
+    lines = order.lines.all()
+
+    # Prepare user data
+    user = order.user
+    user_id = None
+    user_public_metadata = {}
+    if user:
+        user_id = graphene.Node.to_global_id("User", user.id)
+        user_public_metadata = user.metadata
+
+    # Prepare discount data
+    discounts = order.discounts.all()
+    discounts_dict = []
+    for discount in discounts:
+        quantize_price_fields(discount, ("amount_value",), order.currency)
+        discount_amount = quantize_price(discount.amount_value, order.currency)
+        discounts_dict.append({"name": discount.name, "amount": discount_amount})
+
+    # Prepare shipping data
+    shipping_method_name = order.shipping_method_name
+    shipping_method_amount = quantize_price(
+        get_base_price(order.shipping_price, included_taxes_in_prices),
+        order.currency,
+    )
+
+    order_data = serializer.serialize(
+        [order],
+        fields=["currency", "metadata"],
+        additional_fields={
+            "channel": (lambda o: o.channel, CHANNEL_FIELDS),
+            "address": (lambda o: address, ADDRESS_FIELDS),
+        },
+        extra_dict_data={
+            "id": graphene.Node.to_global_id("Order", order.id),
+            "user_id": user_id,
+            "user_public_metadata": user_public_metadata,
+            "discounts": discounts_dict,
+            "included_taxes_in_prices": included_taxes_in_prices,
+            "shipping_amount": shipping_method_amount,
+            "shipping_name": shipping_method_name,
+            "lines": json.loads(
+                _generate_order_lines_payload_for_tax_calculation(lines)
+            ),
+        },
+    )
+    return order_data
 
 
 @traced_payload_generator

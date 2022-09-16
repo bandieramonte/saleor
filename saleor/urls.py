@@ -13,6 +13,7 @@ from .plugins.views import (
     handle_plugin_webhook,
 )
 from .product.views import digital_product
+from .thumbnail.views import handle_thumbnail
 
 urlpatterns = [
     url(r"^graphql/$", csrf_exempt(GraphQLView.as_view(schema=schema)), name="api"),
@@ -37,6 +38,14 @@ urlpatterns = [
         handle_plugin_webhook,
         name="plugins",
     ),
+    url(
+        (
+            r"thumbnail/(?P<instance_id>[.0-9A-Za-z_=\-]+)/(?P<size>\d+)/"
+            r"(?:(?P<format>[a-zA-Z]+)/)?"
+        ),
+        handle_thumbnail,
+        name="thumbnail",
+    ),
     url(r".well-known/jwks.json", jwks, name="jwks"),
 ]
 
@@ -59,5 +68,5 @@ if settings.DEBUG:
 
     urlpatterns += static("/media/", document_root=settings.MEDIA_ROOT) + [
         url(r"^static/(?P<path>.*)$", serve),
-        url(r"^", views.home, name="home"),
+        url(r"^$", views.home, name="home"),
     ]

@@ -7,6 +7,7 @@ from django.contrib.auth.models import Permission
 from django.utils.functional import SimpleLazyObject
 from freezegun import freeze_time
 
+from ....attribute.utils import associate_attribute_values_to_instance
 from ....tests.utils import dummy_editorjs
 from ....webhook.event_types import WebhookEventAsyncType
 from ....webhook.payloads import generate_translation_payload
@@ -17,12 +18,11 @@ from ..schema import TranslatableKinds
 
 def test_product_translation(user_api_client, product, channel_USD):
     description = dummy_editorjs("test description")
-    longDescription = dummy_editorjs("test long description")
     product.translations.create(
         language_code="pl",
         name="Produkt",
+        shortDescription="a short description"
         description=description,
-        longDescription=longDescription,
     )
 
     query = """
@@ -30,9 +30,9 @@ def test_product_translation(user_api_client, product, channel_USD):
         product(id: $productId, channel: $channel) {
             translation(languageCode: PL) {
                 name
+                shortDescription
                 description
                 descriptionJson
-                longDescription
                 language {
                     code
                 }
@@ -49,16 +49,13 @@ def test_product_translation(user_api_client, product, channel_USD):
 
     translation_data = data["product"]["translation"]
     assert translation_data["name"] == "Produkt"
+    assert translation_data["shortDescription"] == "a short description"
     assert translation_data["language"]["code"] == "PL"
     assert (
         translation_data["description"]
         == translation_data["descriptionJson"]
         == dummy_editorjs("test description", json_format=True)
     )
-    assert translation_data["longDescription"] == dummy_editorjs(
-        "test long description", json_format=True
-    )
-
 
 def test_product_translation_without_description(user_api_client, product, channel_USD):
     product.translations.create(language_code="pl", name="Produkt")
@@ -68,9 +65,9 @@ def test_product_translation_without_description(user_api_client, product, chann
         product(id: $productId, channel: $channel) {
             translation(languageCode: PL) {
                 name
+                shortDescription
                 description
                 descriptionJson
-                longDescription
                 language {
                     code
                 }
@@ -87,10 +84,10 @@ def test_product_translation_without_description(user_api_client, product, chann
 
     translation_data = data["product"]["translation"]
     assert translation_data["name"] == "Produkt"
+    assert translation_data["shortDescription"] == "a short description"
     assert translation_data["language"]["code"] == "PL"
     assert translation_data["description"] is None
     assert translation_data["descriptionJson"] == "{}"
-    assert translation_data["longDescription"] is None
 
 
 def test_product_translation_with_app(app_api_client, product, channel_USD):
@@ -827,8 +824,8 @@ PRODUCT_TRANSLATE_MUTATION = """
             product {
                 translation(languageCode: PL) {
                     name
+                    shortDescription
                     description
-                    longDescription
                     language {
                         code
                     }
@@ -885,10 +882,9 @@ def test_product_create_translation_for_description(
 ):
     product_id = graphene.Node.to_global_id("Product", product.id)
     description = dummy_editorjs("description", True)
-    longDescription = dummy_editorjs("longDescription", True)
     variables = {
         "productId": product_id,
-        "input": {"description": description, "longDescription": longDescription},
+        "input": {"description": description},
     }
     response = staff_api_client.post_graphql(
         PRODUCT_TRANSLATE_MUTATION,
@@ -898,8 +894,8 @@ def test_product_create_translation_for_description(
     data = get_graphql_content(response)["data"]["productTranslate"]
 
     assert data["product"]["translation"]["name"] is None
+    assert data["product"]["translation"]["shortDescription"] is None
     assert data["product"]["translation"]["description"] == description
-    assert data["product"]["translation"]["longDescription"] == longDescription
     assert data["product"]["translation"]["language"]["code"] == "PL"
 
 
@@ -908,13 +904,12 @@ def test_product_create_translation_for_description_and_name_as_null(
 ):
     product_id = graphene.Node.to_global_id("Product", product.id)
     description = dummy_editorjs("description", True)
-    longDescription = dummy_editorjs("longDescription", True)
     variables = {
         "productId": product_id,
         "input": {
             "description": description,
-            "longDescription": longDescription,
             "name": None,
+            "shortDescription": None
         },
     }
     response = staff_api_client.post_graphql(
@@ -925,8 +920,8 @@ def test_product_create_translation_for_description_and_name_as_null(
     data = get_graphql_content(response)["data"]["productTranslate"]
 
     assert data["product"]["translation"]["name"] is None
+    assert data["product"]["translation"]["shortDescription"] is None
     assert data["product"]["translation"]["description"] == description
-    assert data["product"]["translation"]["longDescription"] == longDescription
     assert data["product"]["translation"]["language"]["code"] == "PL"
 
 
@@ -967,7 +962,7 @@ def test_product_create_translation_validates_name_length(
     product_id = graphene.Node.to_global_id("Product", product.id)
     variables = {
         "productId": product_id,
-        "input": {"description": None, "longDescription": None, "name": "Long" * 100},
+        "input": {"description": None, "shortDescription": "a short description", "name": "Long" * 100},
     }
     response = staff_api_client.post_graphql(
         PRODUCT_TRANSLATE_MUTATION,
@@ -3087,13 +3082,12 @@ def test_translation_query_no_permission(staff_api_client, menu_item):
 
 def test_product_and_attribute_translation(user_api_client, product, channel_USD):
     description = dummy_editorjs("test description")
-    longDescription = dummy_editorjs("test long description")
 
     product.translations.create(
         language_code="pl",
         name="Produkt",
+        shortDescription="a short description",
         description=description,
-        longDescription=longDescription,
     )
     assigned_attribute = product.attributes.first()
     attribute = assigned_attribute.attribute
@@ -3104,9 +3098,9 @@ def test_product_and_attribute_translation(user_api_client, product, channel_USD
             product(id: $productId, channel: $channel) {
                 translation(languageCode: PL) {
                     name
+                    shortDescription
                     description
                     descriptionJson
-                    longDescription
                     language {
                         code
                     }
@@ -3134,15 +3128,14 @@ def test_product_and_attribute_translation(user_api_client, product, channel_USD
 
     product_translation_data = data["product"]["translation"]
     assert product_translation_data["name"] == "Produkt"
+    assert product_translation_data["shortDescription"] == "a short description"
     assert product_translation_data["language"]["code"] == "PL"
     assert (
         product_translation_data["description"]
         == product_translation_data["descriptionJson"]
         == dummy_editorjs("test description", json_format=True)
     )
-    assert product_translation_data["longDescription"] == dummy_editorjs(
-        "test long description", json_format=True
-    )
+
     attribute_translation_data = data["product"]["attributes"][0]["attribute"][
         "translation"
     ]
@@ -3150,21 +3143,7 @@ def test_product_and_attribute_translation(user_api_client, product, channel_USD
     assert attribute_translation_data["language"]["code"] == "PL"
 
 
-def test_product_attribute_value_rich_text_translation(
-    staff_api_client,
-    product_with_rich_text_attribute,
-    permission_manage_translations,
-):
-    rich_text = dummy_editorjs("Test_dummy_data")
-    assigned_attribute = product_with_rich_text_attribute[0].attributes.first()
-    attribute_value = assigned_attribute.attribute.values.first()
-    attribute_value.translations.create(language_code="pl", rich_text=rich_text)
-
-    product_id = graphene.Node.to_global_id(
-        "Product", product_with_rich_text_attribute[0].id
-    )
-
-    query = """
+PRODUCT_ATTRIBUTE_VALUES_TRANSLATION_QUERY = """
         query translation(
             $kind: TranslatableKinds!
             $id: ID!
@@ -3176,24 +3155,47 @@ def test_product_attribute_value_rich_text_translation(
                     attributeValues {
                         name
                         richText
+                        plainText
                         translation(languageCode: $languageCode) {
                             name
                             richText
+                            plainText
                         }
                     }
                 }
             }
         }
     """
+
+
+def test_product_attribute_value_rich_text_translation(
+    staff_api_client,
+    product_with_rich_text_attribute,
+    permission_manage_translations,
+):
+    # given
+    rich_text = dummy_editorjs("Test_dummy_data")
+    assigned_attribute = product_with_rich_text_attribute[0].attributes.first()
+    attribute_value = assigned_attribute.attribute.values.first()
+    attribute_value.translations.create(language_code="pl", rich_text=rich_text)
+
+    product_id = graphene.Node.to_global_id(
+        "Product", product_with_rich_text_attribute[0].id
+    )
+
+    query = PRODUCT_ATTRIBUTE_VALUES_TRANSLATION_QUERY
     variables = {
         "id": product_id,
         "kind": TranslatableKinds.PRODUCT.name,
         "languageCode": LanguageCodeEnum.PL.name,
     }
 
+    # when
     response = staff_api_client.post_graphql(
         query, variables, permissions=[permission_manage_translations]
     )
+
+    # then
     data = get_graphql_content(response)["data"]
 
     attribute_value_response = data["translation"]["attributeValues"][0]
@@ -3202,12 +3204,79 @@ def test_product_attribute_value_rich_text_translation(
     assert attribute_value_response["translation"]["richText"] == json.dumps(rich_text)
 
 
+def test_product_attribute_value_plain_text_translation(
+    staff_api_client,
+    plain_text_attribute,
+    product,
+    permission_manage_translations,
+):
+    # given
+    product_type = product.product_type
+    product_type.product_attributes.set([plain_text_attribute])
+
+    product_attr_value = plain_text_attribute.values.first()
+    associate_attribute_values_to_instance(
+        product, plain_text_attribute, product_attr_value
+    )
+
+    text = "Test plain text translation"
+    product_attr_value.translations.create(language_code="pl", plain_text=text)
+
+    product_id = graphene.Node.to_global_id("Product", product.id)
+
+    query = PRODUCT_ATTRIBUTE_VALUES_TRANSLATION_QUERY
+    variables = {
+        "id": product_id,
+        "kind": TranslatableKinds.PRODUCT.name,
+        "languageCode": LanguageCodeEnum.PL.name,
+    }
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_translations]
+    )
+
+    # then
+    data = get_graphql_content(response)["data"]
+
+    attribute_value_response = data["translation"]["attributeValues"][0]
+    assert attribute_value_response["name"] == product_attr_value.name
+    assert attribute_value_response["plainText"] == product_attr_value.plain_text
+    assert attribute_value_response["translation"]["plainText"] == text
+
+
+PRODUCT_VARIANT_ATTRIBUTE_VALUES_TRANSLATION_QUERY = """
+    query translation(
+        $kind: TranslatableKinds!
+        $id: ID!
+        $languageCode: LanguageCodeEnum!
+    ) {
+        translation(kind: $kind, id: $id) {
+            ... on ProductVariantTranslatableContent {
+                name
+                attributeValues {
+                    name
+                    richText
+                    plainText
+                    translation(languageCode: $languageCode) {
+                        name
+                        richText
+                        plainText
+                    }
+                }
+            }
+        }
+    }
+"""
+
+
 def test_product_variant_attribute_value_rich_text_translation(
     staff_api_client,
     product_with_rich_text_attribute,
     permission_manage_translations,
     product_type_with_rich_text_attribute,
 ):
+    # given
     rich_text = dummy_editorjs("Test_dummy_data")
     variant_attr = product_type_with_rich_text_attribute.variant_attributes.first()
     attribute_value = variant_attr.values.first()
@@ -3217,42 +3286,90 @@ def test_product_variant_attribute_value_rich_text_translation(
         "ProductVariant", product_with_rich_text_attribute[1].id
     )
 
-    query = """
-        query translation(
-            $kind: TranslatableKinds!
-            $id: ID!
-            $languageCode: LanguageCodeEnum!
-        ) {
-            translation(kind: $kind, id: $id) {
-                ... on ProductVariantTranslatableContent {
-                    name
-                    attributeValues {
-                        name
-                        richText
-                        translation(languageCode: $languageCode) {
-                            name
-                            richText
-                        }
-                    }
-                }
-            }
-        }
-    """
+    query = PRODUCT_VARIANT_ATTRIBUTE_VALUES_TRANSLATION_QUERY
     variables = {
         "id": variant_id,
         "kind": TranslatableKinds.VARIANT.name,
         "languageCode": LanguageCodeEnum.PL.name,
     }
 
+    # when
     response = staff_api_client.post_graphql(
         query, variables, permissions=[permission_manage_translations]
     )
+
+    # then
     data = get_graphql_content(response)["data"]
 
     translations_response = data["translation"]["attributeValues"][0]
     assert translations_response["name"] == attribute_value.name
     assert translations_response["richText"] == json.dumps(attribute_value.rich_text)
     assert translations_response["translation"]["richText"] == json.dumps(rich_text)
+
+
+def test_product_variant_attribute_value_plain_text_translation(
+    staff_api_client,
+    variant,
+    plain_text_attribute,
+    permission_manage_translations,
+):
+    # given
+    product_type = variant.product.product_type
+    product_type.variant_attributes.set([plain_text_attribute])
+
+    attribute_value = plain_text_attribute.values.first()
+    associate_attribute_values_to_instance(
+        variant, plain_text_attribute, attribute_value
+    )
+
+    text = "Test plain text translation"
+    attribute_value.translations.create(language_code="pl", plain_text=text)
+
+    variant_id = graphene.Node.to_global_id("ProductVariant", variant.id)
+
+    query = PRODUCT_VARIANT_ATTRIBUTE_VALUES_TRANSLATION_QUERY
+    variables = {
+        "id": variant_id,
+        "kind": TranslatableKinds.VARIANT.name,
+        "languageCode": LanguageCodeEnum.PL.name,
+    }
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_translations]
+    )
+
+    # then
+    data = get_graphql_content(response)["data"]
+
+    translations_response = data["translation"]["attributeValues"][0]
+    assert translations_response["name"] == attribute_value.name
+    assert translations_response["plainText"] == attribute_value.plain_text
+    assert translations_response["translation"]["plainText"] == text
+
+
+PAGE_ATTRIBUTE_VALUES_TRANSLATION_QUERY = """
+    query translation(
+        $kind: TranslatableKinds!
+        $id: ID!
+        $languageCode: LanguageCodeEnum!
+    ) {
+        translation(kind: $kind, id: $id) {
+            ... on PageTranslatableContent {
+                attributeValues {
+                    name
+                    richText
+                    plainText
+                    translation(languageCode: $languageCode) {
+                        name
+                        richText
+                        plainText
+                    }
+                }
+            }
+        }
+    }
+"""
 
 
 def test_page_attribute_value_rich_text_translation(
@@ -3269,27 +3386,7 @@ def test_page_attribute_value_rich_text_translation(
 
     page_id = graphene.Node.to_global_id("Page", page_with_rich_text_attribute.id)
 
-    query = """
-        query translation(
-            $kind: TranslatableKinds!
-            $id: ID!
-            $languageCode: LanguageCodeEnum!
-        ) {
-            translation(kind: $kind, id: $id) {
-                ... on PageTranslatableContent {
-                    attributeValues {
-                        name
-                        richText
-                        translation(languageCode: $languageCode) {
-                            name
-                            richText
-                        }
-                    }
-                }
-            }
-        }
-
-    """
+    query = PAGE_ATTRIBUTE_VALUES_TRANSLATION_QUERY
 
     variables = {
         "id": page_id,
@@ -3305,3 +3402,46 @@ def test_page_attribute_value_rich_text_translation(
     assert attribute_value_response["name"] == attribute_value.name
     assert attribute_value_response["richText"] == json.dumps(attribute_value.rich_text)
     assert attribute_value_response["translation"]["richText"] == json.dumps(rich_text)
+
+
+def test_page_attribute_value_plain_text_translation(
+    staff_api_client,
+    plain_text_attribute_page_type,
+    page,
+    permission_manage_translations,
+    permission_manage_pages,
+):
+    # given
+    page_type = page.page_type
+    page_type.page_attributes.set([plain_text_attribute_page_type])
+    attribute_value = plain_text_attribute_page_type.values.first()
+
+    associate_attribute_values_to_instance(
+        page, plain_text_attribute_page_type, attribute_value
+    )
+
+    text = "Test plain text translation"
+    attribute_value.translations.create(language_code="pl", plain_text=text)
+
+    page_id = graphene.Node.to_global_id("Page", page.id)
+
+    query = PAGE_ATTRIBUTE_VALUES_TRANSLATION_QUERY
+
+    variables = {
+        "id": page_id,
+        "kind": TranslatableKinds.PAGE.name,
+        "languageCode": LanguageCodeEnum.PL.name,
+    }
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_translations]
+    )
+
+    # then
+    data = get_graphql_content(response)["data"]
+
+    attribute_value_response = data["translation"]["attributeValues"][0]
+    assert attribute_value_response["name"] == attribute_value.name
+    assert attribute_value_response["plainText"] == attribute_value.plain_text
+    assert attribute_value_response["translation"]["plainText"] == text

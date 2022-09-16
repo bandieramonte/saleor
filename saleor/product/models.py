@@ -38,7 +38,6 @@ from measurement.measures import Weight
 from mptt.managers import TreeManager
 from mptt.models import MPTTModel
 from prices import Money
-from versatileimagefield.fields import PPOIField, VersatileImageField
 
 from ..channel.models import Channel
 from ..core.db.fields import SanitizedJSONField
@@ -87,7 +86,7 @@ class Category(ModelWithMetadata, MPTTModel, SeoModel):
     parent = models.ForeignKey(
         "self", null=True, blank=True, related_name="children", on_delete=models.CASCADE
     )
-    background_image = VersatileImageField(
+    background_image = models.ImageField(
         upload_to="category-backgrounds", blank=True, null=True
     )
     background_image_alt = models.CharField(max_length=128, blank=True)
@@ -393,15 +392,13 @@ class Product(SeoModel, ModelWithMetadata):
         ProductType, related_name="products", on_delete=models.CASCADE
     )
     name = models.CharField(max_length=250)
+    shortDescription = models.CharField(max_length=250)
     slug = models.SlugField(max_length=255, unique=True, allow_unicode=True)
     description = SanitizedJSONField(blank=True, null=True, sanitizer=clean_editor_js)
     description_plaintext = TextField(blank=True)
-    longDescription = SanitizedJSONField(
-        blank=True, null=True, sanitizer=clean_editor_js
-    )
-    longDescription_plaintext = TextField(blank=True)
     search_document = models.TextField(blank=True, default="")
     search_vector = SearchVectorField(blank=True, null=True)
+    search_index_dirty = models.BooleanField(default=False)
 
     category = models.ForeignKey(
         Category,
@@ -482,10 +479,8 @@ class ProductTranslation(SeoModelTranslation):
         Product, related_name="translations", on_delete=models.CASCADE
     )
     name = models.CharField(max_length=250, blank=True, null=True)
+    shortDescription = models.CharField(max_length=250, blank=True, null=True)
     description = SanitizedJSONField(blank=True, null=True, sanitizer=clean_editor_js)
-    longDescription = SanitizedJSONField(
-        blank=True, null=True, sanitizer=clean_editor_js
-    )
 
     class Meta:
         unique_together = (("language_code", "product"),)
@@ -802,12 +797,14 @@ class DigitalContentUrl(models.Model):
 
 class ProductMedia(SortableModel):
     product = models.ForeignKey(
-        Product, related_name="media", on_delete=models.SET_NULL, null=True, blank=True
+        Product,
+        related_name="media",
+        on_delete=models.CASCADE,
+        # DEPRECATED
+        null=True,
+        blank=True,
     )
-    image = VersatileImageField(
-        upload_to="products", ppoi_field="ppoi", blank=True, null=True
-    )
-    ppoi = PPOIField()
+    image = models.ImageField(upload_to="products", blank=True, null=True)
     alt = models.CharField(max_length=128, blank=True)
     type = models.CharField(
         max_length=32,
@@ -816,6 +813,7 @@ class ProductMedia(SortableModel):
     )
     external_url = models.CharField(max_length=256, blank=True, null=True)
     oembed_data = JSONField(blank=True, default=dict)
+    # DEPRECATED
     to_remove = models.BooleanField(default=False)
 
     class Meta:
@@ -828,16 +826,6 @@ class ProductMedia(SortableModel):
     @transaction.atomic
     def delete(self, *args, **kwargs):
         super(SortableModel, self).delete(*args, **kwargs)
-
-    @transaction.atomic
-    def set_to_remove(self):
-        self.to_remove = True
-        self.save(update_fields=["to_remove"])
-        if self.sort_order is not None:
-            qs = self.get_ordering_queryset()
-            qs.filter(sort_order__gt=self.sort_order).update(
-                sort_order=F("sort_order") - 1
-            )
 
 
 class VariantMedia(models.Model):
@@ -896,7 +884,7 @@ class Collection(SeoModel, ModelWithMetadata):
         through=CollectionProduct,
         through_fields=("collection", "product"),
     )
-    background_image = VersatileImageField(
+    background_image = models.ImageField(
         upload_to="collection-backgrounds", blank=True, null=True
     )
     background_image_alt = models.CharField(max_length=128, blank=True)

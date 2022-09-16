@@ -56,11 +56,16 @@ def add_gift_card_code_to_checkout(
 
 
 def remove_gift_card_code_from_checkout(checkout: Checkout, gift_card_code: str):
-    """Remove gift card data from checkout by code."""
+    """Remove gift card data from checkout by code.
+
+    Return information whether promo code was removed.
+    """
     gift_card = checkout.gift_cards.filter(code=gift_card_code).first()
     if gift_card:
         checkout.gift_cards.remove(gift_card)
         checkout.save(update_fields=["last_change"])
+        return True
+    return False
 
 
 def deactivate_gift_card(gift_card: GiftCard):
@@ -130,7 +135,7 @@ def fulfill_gift_card_lines(
                         {"order_line": line, "quantity": quantity}
                     )
         else:
-            stock = line.variant.stocks.for_channel(channel_slug).first()
+            stock = line.variant.stocks.for_channel_and_country(channel_slug).first()
             if not stock:
                 raise GiftCardNotApplicable(
                     message="Lack of gift card stock for checkout channel.",

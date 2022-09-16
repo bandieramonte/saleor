@@ -1,8 +1,10 @@
+from datetime import datetime
 from decimal import Decimal
 from functools import partial
 from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
+import pytz
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
@@ -11,12 +13,11 @@ from django.utils import timezone
 from django_countries.fields import CountryField
 from django_prices.models import MoneyField
 from django_prices.templatetags.prices import amount
-from prices import Money, TaxedMoney, fixed_discount, percentage_discount
+from prices import Money, fixed_discount, percentage_discount
 
 from ..channel.models import Channel
 from ..core.models import ModelWithMetadata
 from ..core.permissions import DiscountPermissions
-from ..core.taxes import display_gross_prices
 from ..core.utils.translations import Translation, TranslationProxy
 from . import DiscountValueType, OrderDiscountType, VoucherType
 
@@ -135,8 +136,7 @@ class Voucher(ModelWithMetadata):
             return price
         return price - after_discount
 
-    def validate_min_spent(self, value: TaxedMoney, channel: Channel):
-        value = value.gross if display_gross_prices() else value.net
+    def validate_min_spent(self, value: Money, channel: Channel):
         voucher_channel_listing = self.channel_listings.filter(channel=channel).first()
         if not voucher_channel_listing:
             raise NotApplicable("This voucher is not assigned to this channel")
@@ -268,6 +268,8 @@ class Sale(ModelWithMetadata):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
 
+    notification_sent_datetime = models.DateTimeField(null=True, blank=True)
+
     objects = models.Manager.from_queryset(SaleQueryset)()
     translated = TranslationProxy()
 
@@ -304,6 +306,11 @@ class Sale(ModelWithMetadata):
                 percentage=sale_channel_listing.discount_value,
             )
         raise NotImplementedError("Unknown discount type")
+
+    def is_active(self, date=None):
+        if date is None:
+            date = datetime.now(pytz.utc)
+        return (not self.end_date or self.end_date >= date) and self.start_date <= date
 
 
 class SaleChannelListing(models.Model):

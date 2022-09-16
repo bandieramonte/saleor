@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from unittest.mock import ANY, patch
 
@@ -8,11 +9,11 @@ from django.utils.functional import SimpleLazyObject
 from django_countries import countries
 from freezegun import freeze_time
 
+from ....core.utils.json_serializer import CustomJsonEncoder
 from ....discount import DiscountValueType, VoucherType
 from ....discount.error_codes import DiscountErrorCode
 from ....discount.models import Sale, SaleChannelListing, Voucher
 from ....discount.utils import fetch_catalogue_info
-from ....graphql.discount.mutations import convert_catalogue_info_to_global_ids
 from ....webhook.event_types import WebhookEventAsyncType
 from ....webhook.payloads import generate_meta, generate_requestor
 from ...tests.utils import (
@@ -21,6 +22,7 @@ from ...tests.utils import (
     get_graphql_content_from_response,
 )
 from ..enums import DiscountValueTypeEnum, VoucherTypeEnum
+from ..mutations.utils import convert_catalogue_info_to_global_ids
 
 
 @pytest.fixture
@@ -536,16 +538,19 @@ def test_create_voucher_trigger_webhook(
     # then
     assert content["data"]["voucherCreate"]["voucher"]
     mocked_webhook_trigger.assert_called_once_with(
-        {
-            "id": graphene.Node.to_global_id("Voucher", voucher.id),
-            "name": voucher.name,
-            "code": voucher.code,
-            "meta": generate_meta(
-                requestor_data=generate_requestor(
-                    SimpleLazyObject(lambda: staff_api_client.user)
-                )
-            ),
-        },
+        json.dumps(
+            {
+                "id": graphene.Node.to_global_id("Voucher", voucher.id),
+                "name": voucher.name,
+                "code": voucher.code,
+                "meta": generate_meta(
+                    requestor_data=generate_requestor(
+                        SimpleLazyObject(lambda: staff_api_client.user)
+                    )
+                ),
+            },
+            cls=CustomJsonEncoder,
+        ),
         WebhookEventAsyncType.VOUCHER_CREATED,
         [any_webhook],
         voucher,
@@ -740,16 +745,19 @@ def test_update_voucher_trigger_webhook(
     # then
     assert content["data"]["voucherUpdate"]["voucher"]
     mocked_webhook_trigger.assert_called_once_with(
-        {
-            "id": variables["id"],
-            "name": voucher.name,
-            "code": variables["code"],
-            "meta": generate_meta(
-                requestor_data=generate_requestor(
-                    SimpleLazyObject(lambda: staff_api_client.user)
-                )
-            ),
-        },
+        json.dumps(
+            {
+                "id": variables["id"],
+                "name": voucher.name,
+                "code": variables["code"],
+                "meta": generate_meta(
+                    requestor_data=generate_requestor(
+                        SimpleLazyObject(lambda: staff_api_client.user)
+                    )
+                ),
+            },
+            cls=CustomJsonEncoder,
+        ),
         WebhookEventAsyncType.VOUCHER_UPDATED,
         [any_webhook],
         voucher,
@@ -816,16 +824,19 @@ def test_voucher_delete_mutation_trigger_webhook(
     # then
     assert content["data"]["voucherDelete"]["voucher"]
     mocked_webhook_trigger.assert_called_once_with(
-        {
-            "id": variables["id"],
-            "name": voucher.name,
-            "code": voucher.code,
-            "meta": generate_meta(
-                requestor_data=generate_requestor(
-                    SimpleLazyObject(lambda: staff_api_client.user)
-                )
-            ),
-        },
+        json.dumps(
+            {
+                "id": variables["id"],
+                "name": voucher.name,
+                "code": voucher.code,
+                "meta": generate_meta(
+                    requestor_data=generate_requestor(
+                        SimpleLazyObject(lambda: staff_api_client.user)
+                    )
+                ),
+            },
+            cls=CustomJsonEncoder,
+        ),
         WebhookEventAsyncType.VOUCHER_DELETED,
         [any_webhook],
         voucher,
@@ -940,16 +951,19 @@ def test_voucher_add_catalogues_trigger_webhook(
     assert content["data"]["voucherCataloguesAdd"]["voucher"]
     assert not data["errors"]
     mocked_webhook_trigger.assert_called_once_with(
-        {
-            "id": variables["id"],
-            "name": voucher.name,
-            "code": voucher.code,
-            "meta": generate_meta(
-                requestor_data=generate_requestor(
-                    SimpleLazyObject(lambda: staff_api_client.user)
-                )
-            ),
-        },
+        json.dumps(
+            {
+                "id": variables["id"],
+                "name": voucher.name,
+                "code": voucher.code,
+                "meta": generate_meta(
+                    requestor_data=generate_requestor(
+                        SimpleLazyObject(lambda: staff_api_client.user)
+                    )
+                ),
+            },
+            cls=CustomJsonEncoder,
+        ),
         WebhookEventAsyncType.VOUCHER_UPDATED,
         [any_webhook],
         voucher,
@@ -1140,157 +1154,6 @@ def test_voucher_remove_no_catalogues(
     assert voucher.categories.exists()
     assert voucher.collections.exists()
     assert voucher.variants.exists()
-
-
-@patch("saleor.plugins.manager.PluginsManager.sale_created")
-def test_create_sale(
-    created_webhook_mock, staff_api_client, permission_manage_discounts, product_list
-):
-    query = """
-    mutation  saleCreate(
-            $type: DiscountValueTypeEnum, $name: String, $value: PositiveDecimal,
-            $startDate: DateTime, $endDate: DateTime, $products: [ID!]) {
-        saleCreate(input: {
-                name: $name, type: $type, value: $value,
-                startDate: $startDate, endDate: $endDate, products: $products}) {
-            sale {
-                type
-                name
-                startDate
-                endDate
-            }
-            errors {
-                field
-                code
-                message
-            }
-        }
-    }
-    """
-    start_date = timezone.now() - timedelta(days=365)
-    end_date = timezone.now() + timedelta(days=365)
-    product_ids = [
-        graphene.Node.to_global_id("Product", product.id) for product in product_list
-    ]
-    variables = {
-        "name": "test sale",
-        "type": DiscountValueTypeEnum.FIXED.name,
-        "startDate": start_date.isoformat(),
-        "endDate": end_date.isoformat(),
-        "products": product_ids,
-    }
-
-    response = staff_api_client.post_graphql(
-        query, variables, permissions=[permission_manage_discounts]
-    )
-    content = get_graphql_content(response)
-    data = content["data"]["saleCreate"]["sale"]
-
-    assert data["type"] == DiscountValueType.FIXED.upper()
-    assert data["name"] == "test sale"
-    assert data["startDate"] == start_date.isoformat()
-    assert data["endDate"] == end_date.isoformat()
-
-    sale = Sale.objects.filter(name="test sale").get()
-    current_catalogue = convert_catalogue_info_to_global_ids(fetch_catalogue_info(sale))
-    created_webhook_mock.assert_called_once_with(sale, current_catalogue)
-
-
-def test_create_sale_with_enddate_before_startdate(
-    staff_api_client, permission_manage_discounts
-):
-    query = """
-    mutation  saleCreate(
-            $type: DiscountValueTypeEnum, $name: String, $value: PositiveDecimal,
-            $startDate: DateTime, $endDate: DateTime) {
-        saleCreate(input: {
-                name: $name, type: $type, value: $value,
-                startDate: $startDate, endDate: $endDate}) {
-            sale {
-                type
-                name
-                startDate
-                endDate
-            }
-            errors {
-                field
-                code
-                message
-            }
-        }
-    }
-    """
-    start_date = timezone.now() + timedelta(days=365)
-    end_date = timezone.now() - timedelta(days=365)
-    variables = {
-        "name": "test sale",
-        "type": DiscountValueTypeEnum.FIXED.name,
-        "startDate": start_date.isoformat(),
-        "endDate": end_date.isoformat(),
-    }
-
-    response = staff_api_client.post_graphql(
-        query, variables, permissions=[permission_manage_discounts]
-    )
-    content = get_graphql_content(response)
-    assert content["data"]["saleCreate"]["errors"]
-    errors = content["data"]["saleCreate"]["errors"]
-    assert len(errors) == 1
-    assert errors[0]["field"] == "endDate"
-    assert errors[0]["code"] == DiscountErrorCode.INVALID.name
-    assert errors
-
-
-@patch("saleor.plugins.manager.PluginsManager.sale_updated")
-def test_update_sale(
-    updated_webhook_mock,
-    staff_api_client,
-    sale,
-    permission_manage_discounts,
-    product_list,
-):
-    query = """
-    mutation  saleUpdate($type: DiscountValueTypeEnum, $id: ID!, $products: [ID!]) {
-            saleUpdate(id: $id, input: {type: $type, products: $products}) {
-                errors {
-                    field
-                    code
-                    message
-                }
-                sale {
-                    type
-                }
-            }
-        }
-    """
-
-    # Set discount value type to 'fixed' and change it in mutation
-    sale.type = DiscountValueType.FIXED
-    sale.save()
-    previous_catalogue = convert_catalogue_info_to_global_ids(
-        fetch_catalogue_info(sale)
-    )
-    product_ids = [
-        graphene.Node.to_global_id("Product", product.id) for product in product_list
-    ]
-    variables = {
-        "id": graphene.Node.to_global_id("Sale", sale.id),
-        "type": DiscountValueTypeEnum.PERCENTAGE.name,
-        "products": product_ids,
-    }
-
-    response = staff_api_client.post_graphql(
-        query, variables, permissions=[permission_manage_discounts]
-    )
-    current_catalogue = convert_catalogue_info_to_global_ids(fetch_catalogue_info(sale))
-
-    content = get_graphql_content(response)
-    data = content["data"]["saleUpdate"]["sale"]
-    assert data["type"] == DiscountValueType.PERCENTAGE.upper()
-
-    updated_webhook_mock.assert_called_once_with(
-        sale, previous_catalogue, current_catalogue
-    )
 
 
 @patch("saleor.plugins.manager.PluginsManager.sale_deleted")

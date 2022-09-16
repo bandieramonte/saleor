@@ -520,6 +520,7 @@
       "seo_description": "Launch new markets fast",
       "product_type": 17,
       "name": "Headless + Omnichannel in a pill",
+      "shortDescription": "A short description",
       "slug": "headless-omnichannel-commerce",
       "description": {
         "time": 1652952009724,
@@ -533,18 +534,6 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Launch new markets fast",
-      "longDescription": {
-        "time": 1652952009724,
-        "blocks": [
-          {
-            "id": "32SKrcyWwb",
-            "data": { "text": "Long Launch <b>new markets fast</b>" },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Launch new markets fast",
       "search_document": "",
       "search_vector": "'audio':11B 'digit':10B 'fast':9C 'headless':1A,13A 'headless-omnichannel-mp3':12A 'launch':6C 'market':8C 'mp3':15A,16A,17B 'new':7C 'omnichannel':2A,14A 'pill':5A",
       "category": 26,
@@ -580,20 +569,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "PE at school wouldn’t have been such a drag with these on your feet. Slip on the style and stride tall with Saleor branded plimsolls. PE now stands for pretty elegant.",
-      "longDescription": {
-        "time": 1653425999878,
-        "blocks": [
-          {
-            "id": "zUV4oz05zN",
-            "data": {
-              "text": "<b>Long PE at school wouldn’t have been such a drag</b> with these on your feet. Slip on the style and stride tall with Saleor branded plimsolls. PE now stands for pretty elegant."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long PE at school wouldn’t have been such a drag with these on your feet. Slip on the style and stride tall with Saleor branded plimsolls. PE now stands for pretty elegant.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'39':36A,49B '40':38A,50B '41':40A,51B '42':42A,52B '43':44A,53B '44':46A,54B '45':48A,55B '918223582':35A '918223583':37A '918223584':39A '918223585':41A '918223586':43A '918223587':45A '918223588':47A 'brand':27C 'drag':12C 'eleg':34C 'feet':17C 'pe':3C,29C 'plimsol':2A,28C 'pretti':33C 'saleor':26C 'school':5C 'slip':18C 'stand':31C 'stride':23C 'style':21C 'tall':24C 'white':1A 'wouldn':6C",
       "category": 28,
@@ -629,20 +605,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Step into summer with Saleor. Every time your head goes down, you see these beauties, and your mood bounces right back up.",
-      "longDescription": {
-        "time": 1653426057314,
-        "blocks": [
-          {
-            "id": "b8HYevCTpU",
-            "data": {
-              "text": "<b>Long Step into summer with Saleor.</b> Every time your head goes down, you see these beauties, and your mood bounces right back up."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Step into summer with Saleor. Every time your head goes down, you see these beauties, and your mood bounces right back up.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'40':25A,30B '41':27A,31B '42':29A,32B '818223582':24A '818223583':26A '818223584':28A 'back':23C 'beauti':17C 'blue':1A 'bounc':21C 'everi':8C 'goe':12C 'head':11C 'mood':20C 'plimsol':2A 'right':22C 'saleor':7C 'see':15C 'step':3C 'summer':5C 'time':9C",
       "category": 28,
@@ -678,20 +641,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Step into summer with the right balance.&nbsp;Every time your head goes down, you see these beauties, and your mood bounces right back up.",
-      "longDescription": {
-        "time": 1653426379418,
-        "blocks": [
-          {
-            "id": "N0VISDl8_2",
-            "data": {
-              "text": "<b>Long Step into summer with the right balance.</b>&nbsp;Every time your head goes down, you see these beauties, and your mood bounces right back up."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Step into summer with the right balance.&nbsp;Every time your head goes down, you see these beauties, and your mood bounces right back up.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'118223581':28A '118223582':30A '118223583':32A '118223584':34A '118223585':36A '39':29A,38B '40':31A,39B '41':33A,40B '42':35A,41B '420':4A '45':37A,42B 'back':27C 'balanc':3A,11C 'beauti':21C 'bounc':25C 'everi':12C 'goe':16C 'head':15C 'mood':24C 'paul':1A 'right':10C,26C 'see':19C 'step':5C 'summer':7C 'time':13C",
       "category": 28,
@@ -727,20 +677,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Step into summer with the right balance.&nbsp;Every time your head goes down, you see these beauties, and your mood bounces right back up.",
-      "longDescription": {
-        "time": 1653426379418,
-        "blocks": [
-          {
-            "id": "N0VISDl8_2",
-            "data": {
-              "text": "<b>Long Step into summer with the right balance.</b>&nbsp;Every time your head goes down, you see these beauties, and your mood bounces right back up."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Step into summer with the right balance.&nbsp;Every time your head goes down, you see these beauties, and your mood bounces right back up.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'118223581':28A '118223582':30A '118223583':32A '118223584':34A '118223585':36A '39':29A,38B '40':31A,39B '41':33A,40B '42':35A,41B '420':4A '45':37A,42B 'back':27C 'balanc':3A,11C 'beauti':21C 'bounc':25C 'everi':12C 'goe':16C 'head':15C 'mood':24C 'paul':1A 'right':10C,26C 'see':19C 'step':5C 'summer':7C 'time':13C",
       "category": 28,
@@ -764,8 +701,7 @@
       "slug": "grey-hoodie",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'cotton':3B 'grey':1A 'hoodi':2A 'uhjvzhvjdfzhcmlhbnq6mzq1':4A",
       "category": 29,
@@ -789,8 +725,7 @@
       "slug": "blue-hoodie",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'blue':1A 'hoodi':2A 'polyest':3B 'uhjvzhvjdfzhcmlhbnq6mzq2':4A",
       "category": 29,
@@ -814,8 +749,7 @@
       "slug": "white-hoodie",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'cotton':3B 'hoodi':2A 'uhjvzhvjdfzhcmlhbnq6mzq3':4A 'white':1A",
       "category": 29,
@@ -851,20 +785,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Your t-shirt is your second skin. It’s the version of you that you show to the world. Wear the Monospace one that flows with your command line kung-fu moves!&nbsp;",
-      "longDescription": {
-        "time": 1653425587889,
-        "blocks": [
-          {
-            "id": "HVJ8gMNIXY",
-            "data": {
-              "text": "<b>Long Your t-shirt is your second skin.</b> It’s the version of you that you show to the world. Wear the Monospace one that flows with your command line kung-fu moves!&nbsp;"
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Your t-shirt is your second skin. It’s the version of you that you show to the world. Wear the Monospace one that flows with your command line kung-fu moves!&nbsp;",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'328223580':38A '328223581':39A '328223582':41A '328223583':43A '328223584':45A 'command':31C 'cotton':37B 'flow':28C 'fu':35C 'kung':34C 'kung-fu':33C 'l':42A,48B 'line':32C 'm':40A,47B 'monospac':1A,25C 'move':36C 'one':26C 'second':9C 'shirt':6C 'show':19C 'skin':10C 't-shirt':4C 'tee':2A 'version':14C 'wear':23C 'world':22C 'xl':44A,49B 'xxl':46A,50B",
       "category": 39,
@@ -900,20 +821,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "One style fits all. Get a look that works even when you are taking it easy. Relaxed wear for the fans.",
-      "longDescription": {
-        "time": 1653425391562,
-        "blocks": [
-          {
-            "id": "fMdfe0Bfpe",
-            "data": {
-              "text": "<b>Long One style fits all.</b> Get a look that works even when you are taking it easy. Relaxed wear for the fans."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long One style fits all. Get a look that works even when you are taking it easy. Relaxed wear for the fans.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'128223580':25A '128223581':26A '128223582':28A '128223583':30A '128223584':32A 'easi':18C 'elastan':24B 'even':12C 'fan':23C 'fit':5C 'get':7C 'l':29A,35B 'look':9C 'm':27A,34B 'one':3C 'relax':19C 'shirt':2A 'style':4C 'take':16C 'team':1A 'wear':20C 'work':11C 'xl':31A,36B 'xxl':33A,37B",
       "category": 39,
@@ -949,20 +857,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Ever have those days where you feel a bit geometric?&nbsp;Can't quite shape yourself up right? Show your different sides with a Saleor styles.",
-      "longDescription": {
-        "time": 1653425959030,
-        "blocks": [
-          {
-            "id": "Bw6qwwACo6",
-            "data": {
-              "text": "<b>Long Ever have those days where you feel a bit geometric?</b>&nbsp;Can't quite shape yourself up right? Show your different sides with a Saleor styles."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Ever have those days where you feel a bit geometric?&nbsp;Can't quite shape yourself up right? Show your different sides with a Saleor styles.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'111223580':29A '111223581':30A '111223582':32A 'bit':11C 'cotton':28B 'darko':1A 'day':6C 'differ':22C 'ever':3C 'feel':9C 'geometr':12C 'm':31A,34B 'polo':2A 'quit':15C 'right':19C 'saleor':26C 'shape':16C 'show':20C 'side':23C 'style':27C 'xxl':33A,35B",
       "category": 40,
@@ -998,20 +893,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Ever have those days where you feel a bit geometric? Can't quite shape yourself up right? Show your different sides with a Saleor styles.",
-      "longDescription": {
-        "time": 1653425319677,
-        "blocks": [
-          {
-            "id": "sMEIn2NR8s",
-            "data": {
-              "text": "<b>Long Ever have those days where you feel a bit geometric?</b> Can't quite shape yourself up right? Show your different sides with a Saleor styles."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Ever have those days where you feel a bit geometric? Can't quite shape yourself up right? Show your different sides with a Saleor styles.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'218223580':30A '218223581':32A '218223582':34A 'bit':12C 'blue':1A 'cotton':29B 'day':7C 'differ':23C 'ever':4C 'feel':10C 'geometr':13C 'l':33A,37B 'm':31A,36B 'polygon':2A 'quit':16C 'right':20C 'saleor':27C 'shape':17C 'shirt':3A 'show':21C 'side':24C 'style':28C 'xl':35A,38B",
       "category": 39,
@@ -1047,20 +929,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Ever have those days where you feel a bit geometric? Can't quite shape yourself up right? Show your different sides with a Saleor styles.",
-      "longDescription": {
-        "time": 1653425300293,
-        "blocks": [
-          {
-            "id": "DBlOMRDzk_",
-            "data": {
-              "text": "<b>Long Ever have those days where you feel a bit geometric?</b> Can't quite shape yourself up right? Show your different sides with a Saleor styles."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Ever have those days where you feel a bit geometric? Can't quite shape yourself up right? Show your different sides with a Saleor styles.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'112223580':30A '112223581':31A '112223582':33A 'bit':12C 'cotton':29B 'dark':1A 'day':7C 'differ':23C 'ever':4C 'feel':10C 'geometr':13C 'l':34A,36B 'm':32A,35B 'polygon':2A 'quit':16C 'right':20C 'saleor':27C 'shape':17C 'show':21C 'side':24C 'style':28C 'tee':3A",
       "category": 39,
@@ -1084,8 +953,7 @@
       "slug": "pirates-beanie",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDdescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'beani':3A 'cotton':4B 'pirat':1A 'uhjvzhvjdfzhcmlhbnq6mzy4':5A",
       "category": 35,
@@ -1109,8 +977,7 @@
       "slug": "tactical-neck-warmer",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'neck':1A 'uhjvzhvjdfzhcmlhbnq6mzcw':4A 'warmer':2A 'wool':3B",
       "category": 36,
@@ -1134,8 +1001,7 @@
       "slug": "dry-sunglasses",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'dri':1A 'sunglass':2A 'uhjvzhvjdfzhcmlhbnq6mzcx':3A",
       "category": 37,
@@ -1169,18 +1035,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Scale effortlessly",
-      "longDescription": {
-        "time": 1652811542659,
-        "blocks": [
-          {
-            "id": "g2sLxZcLZa",
-            "data": { "text": "Long Scale <b>effortlessly</b>" },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Scale effortlessly",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'9018223582':10A '9018223583':12A '9018223584':14A 'battl':2A 'battle-test':1A 'brand':5A 'dvd':11A,16B 'effortless':9C 'itun':13A,17B 'like':6A 'lush':7A 'mp3':15A,18B 'scale':8C 'test':3A",
       "category": 26,
@@ -1214,18 +1069,7 @@
         "version": "2.24.3"
       },
       "description_plaintext": "Open Source without the DevOps",
-      "longDescription": {
-        "time": 1652727780700,
-        "blocks": [
-          {
-            "id": "w3x66nix3o",
-            "data": { "text": "Long Open Source <b>without the DevOps</b>" },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.24.3"
-      },
-      "longDescription_plaintext": "Long Open Source without the DevOps",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'113223582':13A '113223583':15A '113223584':17A '113223585':19A 'cd':20A,24B 'cloud':2A 'devop':10C 'dvd':16A,22B 'enterpris':1A 'itun':18A,23B 'on-premis':3A 'open':6C 'premis':5A 'publish':12B 'saleor':11B 'sourc':7C 'vinyl':14A,21B 'without':8C",
       "category": 26,
@@ -1261,20 +1105,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Own your investment, ditch vendor lock-in",
-      "longDescription": {
-        "time": 1652952066167,
-        "blocks": [
-          {
-            "id": "KQt85UC1t1",
-            "data": {
-              "text": "Long Own your investment, <b>ditch vendor lock-in</b>"
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Own your investment, ditch vendor lock-in",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'124223581':15A '124223582':17A 'data':5A 'ditch':9C 'invest':8C 'itun':16A,19B 'lock':12C 'lock-in':11C 'mp3':18A,20B 'publish':14B 'saleor':13B 'stack':3A 'vendor':10C",
       "category": 26,
@@ -1310,20 +1141,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Tonight, my love, let us take fat brushes and paint the skies with the shades of nebula tides. Best for the darkest, moody shades of the coffee you can brew.",
-      "longDescription": {
-        "time": 1653425905079,
-        "blocks": [
-          {
-            "id": "2sjPP8KzGf",
-            "data": {
-              "text": "<b>Long Tonight, my love, let us take fat brushes</b> and paint the skies with the shades of nebula tides. Best for the darkest, moody shades of the coffee you can brew."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Tonight, my love, let us take fat brushes and paint the skies with the shades of nebula tides. Best for the darkest, moody shades of the coffee you can brew.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'best':21C 'brew':32C 'brush':10C 'coffe':29C 'darkest':24C 'fat':9C 'let':6C 'love':5C 'mighti':1A 'moodi':25C 'mug':2A 'nebula':19C 'paint':12C 'shade':17C,26C 'sky':14C 'take':8C 'tide':20C 'tonight':3C 'uhjvzhvjdfzhcmlhbnq6mzgy':33A 'us':7C",
       "category": 41,
@@ -1359,20 +1177,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Minimalist interiors need simple, sleek soft furnishings. Set your own trends with Saleor designs.",
-      "longDescription": {
-        "time": 1653425717989,
-        "blocks": [
-          {
-            "id": "KL2jdkdLiu",
-            "data": {
-              "text": "Long Minimalist interiors need simple, sleek soft furnishings. Set your own trends with Saleor designs."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Minimalist interiors need simple, sleek soft furnishings. Set your own trends with Saleor designs.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'cushion':3A 'dash':2A 'design':17C 'furnish':10C 'interior':5C 'minimalist':4C 'need':6C 'saleor':16C 'set':11C 'simpl':7C 'sleek':8C 'soft':9C 'trend':14C 'uhjvzhvjdfzhcmlhbnq6mzgz':18A",
       "category": 41,
@@ -1408,20 +1213,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Fell straight from the tree, on to Newton’s head, then into the bottle. The autumn taste of English apples. Brought to you by gravity.",
-      "longDescription": {
-        "time": 1653425438149,
-        "blocks": [
-          {
-            "id": "rGR983yNVl",
-            "data": {
-              "text": "<b>Long Fell straight from the tree</b>, on to Newton’s head, then into the bottle. The autumn taste of English apples. Brought to you by gravity."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Fell straight from the tree, on to Newton’s head, then into the bottle. The autumn taste of English apples. Brought to you by gravity.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'appl':1A,22C,28B 'autumn':18C 'bottl':16C 'brought':23C 'english':21C 'fell':3C 'graviti':27C 'head':12C 'juic':2A 'newton':10C 'straight':4C 'tast':19C 'tree':7C 'uhjvzhvjdfzhcmlhbnq6mzg0':29A",
       "category": 43,
@@ -1457,20 +1249,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Bean there, drunk that! The energy drink for the health-conscious. Brand new bean juice; from allotment to bottle in under 8 hours.",
-      "longDescription": {
-        "time": 1653425488999,
-        "blocks": [
-          {
-            "id": "QHFEWEGvaq",
-            "data": {
-              "text": "<b>Long Bean there, drunk that!</b> The energy drink for the health-conscious. Brand new bean juice; from allotment to bottle in under 8 hours."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Bean there, drunk that! The energy drink for the health-conscious. Brand new bean juice; from allotment to bottle in under 8 hours.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'8':25C 'allot':20C 'bean':1A,3C,17C,27B 'bottl':22C 'brand':15C 'conscious':14C 'drink':9C 'drunk':5C 'energi':8C 'health':13C 'health-consci':12C 'hour':26C 'juic':2A,18C 'new':16C 'uhjvzhvjdfzhcmlhbnq6mzg1':28A",
       "category": 43,
@@ -1506,20 +1285,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Build your protein the natural way, with exotic banana juice made from ripe fruit and packed with all the goodness of the tropical sun.",
-      "longDescription": {
-        "time": 1653425465674,
-        "blocks": [
-          {
-            "id": "94R0GvrOck",
-            "data": {
-              "text": "<b>Long Build your protein the natural way</b>, with exotic banana juice made from ripe fruit and packed with all the goodness of the tropical sun."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Build your protein the natural way, with exotic banana juice made from ripe fruit and packed with all the goodness of the tropical sun.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'banana':1A,11C,27B 'build':3C 'exot':10C 'fruit':16C 'good':22C 'juic':2A,12C 'made':13C 'natur':7C 'pack':18C 'protein':5C 'ripe':15C 'sun':26C 'tropic':25C 'uhjvzhvjdfzhcmlhbnq6mzg2':28A 'way':8C",
       "category": 43,
@@ -1555,20 +1321,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Improve your eyesight the natural way with 100% pure, squeezed carrot juice. The sweet, orange nectar of Mother Earth.",
-      "longDescription": {
-        "time": 1652790989820,
-        "blocks": [
-          {
-            "id": "VWVrSI_Cza",
-            "data": {
-              "text": "Long Improve your eyesight the natural way with <b>100% pure, squeezed carrot juice</b>. The sweet, orange nectar of <i>Mother Earth</i>."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Improve your eyesight the natural way with 100% pure, squeezed carrot juice. The sweet, orange nectar of Mother Earth.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'100':10C 'carrot':1A,13C,22B 'earth':21C 'eyesight':5C 'improv':3C 'juic':2A,14C 'mother':20C 'natur':7C 'nectar':18C 'orang':17C 'pure':11C 'squeez':12C 'sweet':16C 'uhjvzhvjdfzhcmlhbnq6mzg3':23A 'way':8C",
       "category": 43,
@@ -1592,8 +1345,7 @@
       "slug": "monokai-dimmed-sunnies",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'dim':2A 'monokai':1A 'sunni':3A 'uhjvzhvjdfzhcmlhbnq6mzg4':4A",
       "category": 37,
@@ -1629,20 +1381,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Wondering if this will look as good on you as it does on the screen? The answer is yes. A quality Monospace Tee variant art with smart styling.",
-      "longDescription": {
-        "time": 1653425264795,
-        "blocks": [
-          {
-            "id": "CMRIgvbpUG",
-            "data": {
-              "text": "Long Wondering if this will look as good on you as it does on the screen? The answer is yes. A quality Monospace Tee variant art with smart styling."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Wondering if this will look as good on you as it does on the screen? The answer is yes. A quality Monospace Tee variant art with smart styling.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'9182235820':32A '9182235821':34A 'answer':20C 'art':28C 'good':10C 'look':8C 'monospac':25C 'monotyp':2A 'qualiti':24C 'revers':1A 'screen':18C 'smart':30C 'style':31C 'tee':3A,26C 'variant':27C 'wonder':4C 'xl':33A,36B 'xxl':35A,37B 'yes':22C",
       "category": 39,
@@ -1676,18 +1415,7 @@
         "version": "2.24.3"
       },
       "description_plaintext": "Gift card to use in the shop.",
-      "longDescription": {
-        "time": 1652788779629,
-        "blocks": [
-          {
-            "id": "x5bGwCbYOX",
-            "data": { "text": "Long Gift card to use in the shop." },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.24.3"
-      },
-      "longDescription_plaintext": "Long Gift card to use in the shop.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'100':3A 'card':2A,5C 'gift':1A,4C 'shop':10C 'uhjvzhvjdfzhcmlhbnq6mzkz':11A 'use':7C",
       "category": 44,
@@ -1723,20 +1451,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "There is life in outer space. This vibrant light speed cubes brings life to any surface. Goes on easy and dries at light speed.",
-      "longDescription": {
-        "time": 1653424009054,
-        "blocks": [
-          {
-            "id": "0n5N0DE7BU",
-            "data": {
-              "text": "<b>Long There is life in outer space.</b> This vibrant light speed cubes brings life to any surface. Goes on easy and dries at light speed."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long There is life in outer space. This vibrant light speed cubes brings life to any surface. Goes on easy and dries at light speed.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'49182235820':29A '49182235821':30A '49182235822':32A '49182235823':34A '49182235824':36A 'bring':15C 'cotton':28B 'cube':1A,14C 'dri':24C 'easi':22C 'fountain':2A 'goe':20C 'l':33A,39B 'life':6C,16C 'light':12C,26C 'm':31A,38B 'outer':8C 'space':9C 'speed':13C,27C 'surfac':19C 'tee':3A 'vibrant':11C 'xl':35A,40B 'xxl':37A,41B",
       "category": 39,
@@ -1772,20 +1487,7 @@
         "version": "2.22.2"
       },
       "description_plaintext": "Minimalist interiors need simple, sleek soft furnishings. Don’t parrot what others do, set your own monochrome trends with Saleor designs.",
-      "longDescription": {
-        "time": 1652875592737,
-        "blocks": [
-          {
-            "id": "46o78ZqlJ8",
-            "data": {
-              "text": "Long Minimalist interiors need simple, sleek soft furnishings. Don’t parrot what others do, set your own monochrome trends with Saleor designs."
-            },
-            "type": "paragraph"
-          }
-        ],
-        "version": "2.22.2"
-      },
-      "longDescription_plaintext": "Long Minimalist interiors need simple, sleek soft furnishings. Don’t parrot what others do, set your own monochrome trends with Saleor designs.",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'cushion':3A 'design':24C 'furnish':10C 'interior':5C 'minimalist':4C 'monochrom':20C 'need':6C 'other':15C 'parrot':2A,13C 'saleor':23C 'set':17C 'simpl':7C 'sleek':8C 'soft':9C 'trend':21C 'uhjvzhvjdfzhcmlhbnq6mzk5':25A 'white':1A",
       "category": 41,
@@ -1809,8 +1511,7 @@
       "slug": "gift-card-500",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'500':3A 'card':2A 'gift':1A 'uhjvzhvjdfzhcmlhbnq6ndaw':4A",
       "category": 44,
@@ -1834,8 +1535,7 @@
       "slug": "gift-card-50",
       "description": null,
       "description_plaintext": "",
-      "longDescription": null,
-      "longDescription_plaintext": "",
+      "shortDescription": "A short description",
       "search_document": "",
       "search_vector": "'50':3A 'card':2A 'gift':1A 'uhjvzhvjdfzhcmlhbnq6ndax':4A",
       "category": 44,

@@ -1,7 +1,8 @@
 from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from unittest import mock
+from functools import reduce
+from operator import getitem
 from unittest.mock import ANY, MagicMock, Mock, call, patch
 
 import graphene
@@ -9,6 +10,7 @@ import pytest
 import pytz
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
+from django.core.files import File
 from django.db.models import Sum
 from django.utils import timezone
 from freezegun import freeze_time
@@ -20,20 +22,23 @@ from ....checkout import AddressType
 from ....checkout.utils import PRIVATE_META_APP_SHIPPING_ID
 from ....core.anonymize import obfuscate_email
 from ....core.notify_events import NotifyEventType
+from ....core.postgres import FlatConcatSearchVector
 from ....core.prices import quantize_price
 from ....core.taxes import TaxError, zero_taxed_money
-from ....discount.models import OrderDiscount
+from ....discount.models import OrderDiscount, VoucherChannelListing
 from ....giftcard import GiftCardEvents
 from ....giftcard.events import gift_cards_bought_event, gift_cards_used_in_order_event
 from ....order import FulfillmentStatus, OrderEvents, OrderOrigin, OrderStatus
 from ....order import events as order_events
 from ....order.error_codes import OrderErrorCode
 from ....order.events import order_replacement_created
+from ....order.fetch import fetch_order_info
+from ....order.interface import OrderTaxedPricesData
 from ....order.models import Order, OrderEvent, OrderLine, get_order_number
 from ....order.notifications import get_default_order_payload
 from ....order.search import (
-    prepare_order_search_document_value,
-    update_order_search_document,
+    prepare_order_search_vector_value,
+    update_order_search_vector,
 )
 from ....order.utils import update_order_authorize_data, update_order_charge_data
 from ....payment import ChargeStatus, PaymentError, TransactionAction, TransactionStatus
@@ -43,8 +48,11 @@ from ....plugins.base_plugin import ExcludedShippingMethod
 from ....plugins.manager import PluginsManager, get_plugins_manager
 from ....product.models import ProductVariant, ProductVariantChannelListing
 from ....shipping.models import ShippingMethod, ShippingMethodChannelListing
+from ....tests.consts import TEST_SERVER_DOMAIN
+from ....thumbnail.models import Thumbnail
 from ....warehouse.models import Allocation, PreorderAllocation, Stock, Warehouse
 from ....warehouse.tests.utils import get_available_quantity_for_stock
+from ...core.enums import ThumbnailFormatEnum
 from ...core.utils import to_global_id_or_none
 from ...payment.enums import TransactionStatusEnum
 from ...payment.types import PaymentChargeStatusEnum
@@ -177,6 +185,14 @@ def test_orderline_query(staff_api_client, permission_manage_orders, fulfilled_o
                                     amount
                                 }
                             }
+                            metadata {
+                                key
+                                value
+                            }
+                            privateMetadata {
+                                key
+                                value
+                            }
                         }
                     }
                 }
@@ -184,6 +200,12 @@ def test_orderline_query(staff_api_client, permission_manage_orders, fulfilled_o
         }
     """
     line = order.lines.first()
+
+    metadata_key = "md key"
+    metadata_value = "md value"
+
+    line.store_value_in_private_metadata({metadata_key: metadata_value})
+    line.store_value_in_metadata({metadata_key: metadata_value})
     line.save()
 
     staff_api_client.user.user_permissions.add(permission_manage_orders)
@@ -197,7 +219,12 @@ def test_orderline_query(staff_api_client, permission_manage_orders, fulfilled_o
     assert first_order_data_line["variant"]["id"] == variant_id
     assert first_order_data_line["quantity"] == line.quantity
     assert first_order_data_line["unitPrice"]["currency"] == line.unit_price.currency
-
+    assert first_order_data_line["metadata"] == [
+        {"key": metadata_key, "value": metadata_value}
+    ]
+    assert first_order_data_line["privateMetadata"] == [
+        {"key": metadata_key, "value": metadata_value}
+    ]
     expected_unit_price = Money(
         amount=str(first_order_data_line["unitPrice"]["gross"]["amount"]),
         currency="USD",
@@ -557,7 +584,7 @@ def test_order_query(
         channel_id=order.channel_id,
     )
     expected_collection_points = Warehouse.objects.applicable_for_click_and_collect(
-        lines_qs=order.lines, country=order.shipping_address.country.code
+        lines_qs=order.lines, channel_id=order.channel.id
     )
 
     assert len(order_data["availableShippingMethods"]) == (expected_methods.count())
@@ -576,6 +603,51 @@ def test_order_query(
         method["minimumOrderPrice"]["amount"]
     )
     assert order_data["deliveryMethod"]["id"] == order_data["shippingMethod"]["id"]
+
+
+def test_order_query_total_price_is_0(
+    staff_api_client,
+    permission_manage_orders,
+    permission_manage_shipping,
+    fulfilled_order,
+    shipping_zone,
+):
+    """Ensure the payment status is FULLY_CHARGED when the order total is 0
+    and there is no payment."""
+    # given
+    order = fulfilled_order
+    price = zero_taxed_money(order.currency)
+    order.shipping_price = price
+    order.total = price
+    shipping_tax_rate = Decimal("0")
+    order.shipping_tax_rate = shipping_tax_rate
+    private_value = "abc123"
+    public_value = "123abc"
+    order.shipping_method.store_value_in_metadata({"test": public_value})
+    order.shipping_method.store_value_in_private_metadata({"test": private_value})
+    order.shipping_method.save()
+    order.save()
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+    staff_api_client.user.user_permissions.add(permission_manage_shipping)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY)
+    content = get_graphql_content(response)
+
+    # then
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    assert order_data["number"] == str(order.number)
+    assert order_data["channel"]["slug"] == order.channel.slug
+    assert order_data["canFinalize"] is True
+    assert order_data["status"] == order.status.upper()
+    assert order_data["statusDisplay"] == order.get_status_display()
+    payment_charge_status = PaymentChargeStatusEnum.FULLY_CHARGED
+    assert order_data["paymentStatus"] == payment_charge_status.name
+    assert (
+        order_data["paymentStatusDisplay"]
+        == dict(ChargeStatus.CHOICES)[payment_charge_status.value]
+    )
 
 
 @pytest.mark.parametrize(
@@ -1230,6 +1302,228 @@ def test_order_query_shows_non_draft_orders(
     assert len(edges) == Order.objects.non_draft().count()
 
 
+ORDERS_QUERY_LINE_THUMBNAIL = """
+    query OrdersQuery($size: Int, $format: ThumbnailFormatEnum) {
+        orders(first: 1) {
+            edges {
+                node {
+                    lines {
+                        id
+                        thumbnail(size: $size, format: $format) {
+                            url
+                        }
+                    }
+                }
+            }
+        }
+    }
+"""
+
+
+def test_order_query_no_thumbnail(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+):
+    # given
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    assert len(order_data["lines"]) == 1
+    assert not order_data["lines"][0]["thumbnail"]
+
+
+def test_order_query_product_image_size_and_format_given_proxy_url_returned(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+    product_with_image,
+):
+    # given
+    order_line.variant.product = product_with_image
+    media = product_with_image.media.first()
+    format = ThumbnailFormatEnum.WEBP.name
+    variables = {
+        "size": 120,
+        "format": format,
+    }
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL, variables)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    media_id = graphene.Node.to_global_id("ProductMedia", media.pk)
+    assert len(order_data["lines"]) == 1
+    assert (
+        order_data["lines"][0]["thumbnail"]["url"]
+        == f"http://{TEST_SERVER_DOMAIN}/thumbnail/{media_id}/128/{format.lower()}/"
+    )
+
+
+def test_order_query_product_image_size_given_proxy_url_returned(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+    product_with_image,
+):
+    # given
+    order_line.variant.product = product_with_image
+    media = product_with_image.media.first()
+    variables = {
+        "size": 120,
+    }
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL, variables)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    media_id = graphene.Node.to_global_id("ProductMedia", media.pk)
+    assert len(order_data["lines"]) == 1
+    assert (
+        order_data["lines"][0]["thumbnail"]["url"]
+        == f"http://{TEST_SERVER_DOMAIN}/thumbnail/{media_id}/128/"
+    )
+
+
+def test_order_query_product_image_size_given_thumbnail_url_returned(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+    product_with_image,
+):
+    # given
+    order_line.variant.product = product_with_image
+    media = product_with_image.media.first()
+
+    thumbnail_mock = MagicMock(spec=File)
+    thumbnail_mock.name = "thumbnail_image.jpg"
+    Thumbnail.objects.create(product_media=media, size=128, image=thumbnail_mock)
+
+    variables = {
+        "size": 120,
+    }
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL, variables)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    assert len(order_data["lines"]) == 1
+    assert (
+        order_data["lines"][0]["thumbnail"]["url"]
+        == f"http://{TEST_SERVER_DOMAIN}/media/thumbnails/{thumbnail_mock.name}"
+    )
+
+
+def test_order_query_variant_image_size_and_format_given_proxy_url_returned(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+    variant_with_image,
+):
+    # given
+    order_line.variant = variant_with_image
+    media = variant_with_image.media.first()
+    format = ThumbnailFormatEnum.WEBP.name
+    variables = {
+        "size": 120,
+        "format": format,
+    }
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL, variables)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    media_id = graphene.Node.to_global_id("ProductMedia", media.pk)
+    assert len(order_data["lines"]) == 1
+    assert (
+        order_data["lines"][0]["thumbnail"]["url"]
+        == f"http://{TEST_SERVER_DOMAIN}/thumbnail/{media_id}/128/{format.lower()}/"
+    )
+
+
+def test_order_query_variant_image_size_given_proxy_url_returned(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+    variant_with_image,
+):
+    # given
+    order_line.variant = variant_with_image
+    media = variant_with_image.media.first()
+    variables = {
+        "size": 120,
+    }
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL, variables)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    media_id = graphene.Node.to_global_id("ProductMedia", media.pk)
+    assert len(order_data["lines"]) == 1
+    assert (
+        order_data["lines"][0]["thumbnail"]["url"]
+        == f"http://{TEST_SERVER_DOMAIN}/thumbnail/{media_id}/128/"
+    )
+
+
+def test_order_query_variant_image_size_given_thumbnail_url_returned(
+    staff_api_client,
+    permission_manage_orders,
+    order_line,
+    variant_with_image,
+):
+    # given
+    order_line.variant = variant_with_image
+    media = variant_with_image.media.first()
+
+    thumbnail_mock = MagicMock(spec=File)
+    thumbnail_mock.name = "thumbnail_image.jpg"
+    Thumbnail.objects.create(product_media=media, size=128, image=thumbnail_mock)
+
+    variables = {
+        "size": 120,
+    }
+
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    # when
+    response = staff_api_client.post_graphql(ORDERS_QUERY_LINE_THUMBNAIL, variables)
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["orders"]["edges"][0]["node"]
+    assert len(order_data["lines"]) == 1
+    assert (
+        order_data["lines"][0]["thumbnail"]["url"]
+        == f"http://{TEST_SERVER_DOMAIN}/media/thumbnails/{thumbnail_mock.name}"
+    )
+
+
 ORDER_CONFIRM_MUTATION = """
     mutation orderConfirm($id: ID!) {
         orderConfirm(id: $id) {
@@ -1245,24 +1539,38 @@ ORDER_CONFIRM_MUTATION = """
 """
 
 
+@patch("saleor.order.actions.handle_fully_paid_order")
 @patch("saleor.plugins.manager.PluginsManager.notify")
 @patch("saleor.payment.gateway.capture")
 def test_order_confirm(
     capture_mock,
     mocked_notify,
+    handle_fully_paid_order_mock,
     staff_api_client,
     order_unconfirmed,
     permission_manage_orders,
     payment_txn_preauth,
+    site_settings,
 ):
+    # given
     payment_txn_preauth.order = order_unconfirmed
-    payment_txn_preauth.save()
+    payment_txn_preauth.captured_amount = order_unconfirmed.total.gross.amount
+    payment_txn_preauth.total = order_unconfirmed.total.gross.amount
+    payment_txn_preauth.save(update_fields=["order", "captured_amount", "total"])
+
+    order_unconfirmed.total_charged = order_unconfirmed.total.gross
+    order_unconfirmed.save(update_fields=["total_charged_amount"])
+
     staff_api_client.user.user_permissions.add(permission_manage_orders)
     assert not OrderEvent.objects.exists()
+
+    # when
     response = staff_api_client.post_graphql(
         ORDER_CONFIRM_MUTATION,
         {"id": graphene.Node.to_global_id("Order", order_unconfirmed.id)},
     )
+
+    # then
     order_data = get_graphql_content(response)["data"]["orderConfirm"]["order"]
 
     assert order_data["status"] == OrderStatus.UNFULFILLED.upper()
@@ -1297,6 +1605,10 @@ def test_order_confirm(
         NotifyEventType.ORDER_CONFIRMED,
         expected_payload,
         channel_slug=order_unconfirmed.channel.slug,
+    )
+    order_info = fetch_order_info(order_unconfirmed)
+    handle_fully_paid_order_mock.assert_called_once_with(
+        ANY, order_info, staff_api_client.user, None, site_settings
     )
 
 
@@ -2213,6 +2525,11 @@ DRAFT_ORDER_CREATE_MUTATION = """
                             code
                         }
                         customerNote
+                        total {
+                            gross {
+                                amount
+                            }
+                        }
                     }
                 }
         }
@@ -2291,7 +2608,7 @@ def test_draft_order_create(
     assert order.shipping_method == shipping_method
     assert order.billing_address
     assert order.shipping_address
-    assert order.search_document
+    assert order.search_vector
 
     # Ensure the correct event was created
     created_draft_event = OrderEvent.objects.get(
@@ -2316,6 +2633,101 @@ def test_draft_order_create(
     assert event_parameters["lines"][1]["item"] == str(order_lines[1])
     assert event_parameters["lines"][1]["line_pk"] == str(order_lines[1].pk)
     assert event_parameters["lines"][1]["quantity"] == 1
+
+
+def test_draft_order_create_with_same_variant_and_force_new_line(
+    staff_api_client,
+    permission_manage_orders,
+    staff_user,
+    customer_user,
+    shipping_method,
+    variant,
+    voucher,
+    channel_USD,
+    graphql_address_data,
+):
+    variant_0 = variant
+    query = DRAFT_ORDER_CREATE_MUTATION
+
+    # Ensure no events were created yet
+    assert not OrderEvent.objects.exists()
+
+    user_id = graphene.Node.to_global_id("User", customer_user.id)
+    variant_id = graphene.Node.to_global_id("ProductVariant", variant_0.id)
+
+    discount = "10"
+    customer_note = "Test note"
+    variant_list = [
+        {"variantId": variant_id, "quantity": 2},
+        {"variantId": variant_id, "quantity": 1, "forceNewLine": True},
+    ]
+    shipping_address = graphql_address_data
+    shipping_id = graphene.Node.to_global_id("ShippingMethod", shipping_method.id)
+    voucher_id = graphene.Node.to_global_id("Voucher", voucher.id)
+    channel_id = graphene.Node.to_global_id("Channel", channel_USD.id)
+    redirect_url = "https://www.example.com"
+
+    variables = {
+        "user": user_id,
+        "discount": discount,
+        "lines": variant_list,
+        "billingAddress": shipping_address,
+        "shippingAddress": shipping_address,
+        "shippingMethod": shipping_id,
+        "voucher": voucher_id,
+        "customerNote": customer_note,
+        "channel": channel_id,
+        "redirectUrl": redirect_url,
+    }
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+    assert not content["data"]["draftOrderCreate"]["errors"]
+    data = content["data"]["draftOrderCreate"]["order"]
+    assert data["status"] == OrderStatus.DRAFT.upper()
+    assert data["voucher"]["code"] == voucher.code
+    assert data["customerNote"] == customer_note
+    assert data["redirectUrl"] == redirect_url
+    assert (
+        data["billingAddress"]["streetAddress1"]
+        == graphql_address_data["streetAddress1"]
+    )
+    assert (
+        data["shippingAddress"]["streetAddress1"]
+        == graphql_address_data["streetAddress1"]
+    )
+
+    order = Order.objects.first()
+    assert order.user == customer_user
+    assert order.shipping_method == shipping_method
+    assert order.billing_address
+    assert order.shipping_address
+    assert order.search_vector
+
+    # Ensure the correct event was created
+    created_draft_event = OrderEvent.objects.get(
+        type=order_events.OrderEvents.DRAFT_CREATED
+    )
+    assert created_draft_event.user == staff_user
+    assert created_draft_event.parameters == {}
+
+    # Ensure the order_added_products_event was created properly
+    added_products_event = OrderEvent.objects.get(
+        type=order_events.OrderEvents.ADDED_PRODUCTS
+    )
+    event_parameters = added_products_event.parameters
+    assert event_parameters
+    assert len(event_parameters["lines"]) == 2
+
+    order_lines = list(order.lines.all())
+    assert event_parameters["lines"][0]["item"] == str(order_lines[0])
+    assert event_parameters["lines"][0]["line_pk"] == str(order_lines[0].pk)
+    assert event_parameters["lines"][0]["quantity"] == 1
+
+    assert event_parameters["lines"][1]["item"] == str(order_lines[1])
+    assert event_parameters["lines"][1]["line_pk"] == str(order_lines[1].pk)
+    assert event_parameters["lines"][1]["quantity"] == 2
 
 
 def test_draft_order_create_with_inactive_channel(
@@ -2537,9 +2949,9 @@ def test_draft_order_create_variant_with_0_price(
     assert created_draft_event.parameters == {}
 
 
-@patch("saleor.graphql.order.mutations.draft_order_create.add_variant_to_order")
+@patch("saleor.graphql.order.mutations.draft_order_create.create_order_line")
 def test_draft_order_create_tax_error(
-    add_variant_to_order_mock,
+    create_order_line_mock,
     staff_api_client,
     permission_manage_orders,
     staff_user,
@@ -2553,7 +2965,7 @@ def test_draft_order_create_tax_error(
 ):
     variant_0 = variant
     err_msg = "Test error"
-    add_variant_to_order_mock.side_effect = TaxError(err_msg)
+    create_order_line_mock.side_effect = TaxError(err_msg)
     query = DRAFT_ORDER_CREATE_MUTATION
     # Ensure no events were created yet
     assert not OrderEvent.objects.exists()
@@ -3115,6 +3527,69 @@ def test_draft_order_create_invalid_shipping_address(
     assert errors[0]["addressType"] == AddressType.SHIPPING.upper()
 
 
+@patch("saleor.order.calculations.fetch_order_prices_if_expired")
+def test_draft_order_create_price_recalculation(
+    mock_fetch_order_prices_if_expired,
+    staff_api_client,
+    permission_manage_orders,
+    customer_user,
+    product_available_in_many_channels,
+    product_variant_list,
+    channel_PLN,
+    graphql_address_data,
+    voucher,
+):
+    # given
+    fake_order = Mock()
+    fake_order.total = zero_taxed_money(channel_PLN.currency_code)
+    response = Mock(return_value=(fake_order, None))
+    mock_fetch_order_prices_if_expired.side_effect = response
+    query = DRAFT_ORDER_CREATE_MUTATION
+    user_id = graphene.Node.to_global_id("User", customer_user.id)
+    discount = "10"
+    variant_1 = product_available_in_many_channels.variants.first()
+    variant_2 = product_variant_list[2]
+    variant_1_id = graphene.Node.to_global_id("ProductVariant", variant_1.id)
+    variant_2_id = graphene.Node.to_global_id("ProductVariant", variant_2.id)
+    quantity_1 = 3
+    quantity_2 = 4
+    lines = [
+        {"variantId": variant_1_id, "quantity": quantity_1},
+        {"variantId": variant_2_id, "quantity": quantity_2},
+    ]
+    address = graphql_address_data
+    voucher_amount = 13
+    VoucherChannelListing.objects.create(
+        voucher=voucher,
+        channel=channel_PLN,
+        discount=Money(voucher_amount, channel_PLN.currency_code),
+    )
+    voucher_id = graphene.Node.to_global_id("Voucher", voucher.id)
+    channel_id = graphene.Node.to_global_id("Channel", channel_PLN.id)
+    variables = {
+        "user": user_id,
+        "discount": discount,
+        "lines": lines,
+        "billingAddress": address,
+        "shippingAddress": address,
+        "voucher": voucher_id,
+        "channel": channel_id,
+    }
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+
+    # then
+    assert not content["data"]["draftOrderCreate"]["errors"]
+    assert Order.objects.count() == 1
+    order = Order.objects.first()
+    lines = list(order.lines.all())
+    mock_fetch_order_prices_if_expired.assert_called_once_with(order, ANY, lines, False)
+
+
 DRAFT_UPDATE_QUERY = """
         mutation draftUpdate(
         $id: ID!,
@@ -3242,7 +3717,7 @@ def test_draft_order_update(
     order.refresh_from_db()
     assert order.voucher
     assert order.customer_note == customer_note
-    assert order.search_document
+    assert order.search_vector
 
 
 def test_draft_order_update_with_non_draft_order(
@@ -3261,45 +3736,6 @@ def test_draft_order_update_with_non_draft_order(
     error = content["data"]["draftOrderUpdate"]["errors"][0]
     assert error["field"] == "id"
     assert error["code"] == OrderErrorCode.INVALID.name
-
-
-@patch("saleor.graphql.order.mutations.draft_order_create.update_order_prices")
-def test_draft_order_update_tax_error(
-    update_order_prices_mock,
-    staff_api_client,
-    permission_manage_orders,
-    draft_order,
-    voucher,
-    graphql_address_data,
-):
-    err_msg = "Test error"
-    update_order_prices_mock.side_effect = TaxError(err_msg)
-    order = draft_order
-    assert not order.voucher
-    assert not order.customer_note
-    query = DRAFT_ORDER_UPDATE_MUTATION
-    order_id = graphene.Node.to_global_id("Order", order.id)
-    voucher_id = graphene.Node.to_global_id("Voucher", voucher.id)
-    customer_note = "Test customer note"
-    variables = {
-        "id": order_id,
-        "voucher": voucher_id,
-        "customerNote": customer_note,
-        "shippingAddress": graphql_address_data,
-    }
-    response = staff_api_client.post_graphql(
-        query, variables, permissions=[permission_manage_orders]
-    )
-    content = get_graphql_content(response)
-    data = content["data"]["draftOrderUpdate"]
-    errors = data["errors"]
-    assert len(errors) == 1
-    assert errors[0]["code"] == OrderErrorCode.TAX_ERROR.name
-    assert errors[0]["message"] == f"Unable to calculate taxes - {err_msg}"
-
-    order.refresh_from_db()
-    assert not order.voucher
-    assert not order.customer_note
 
 
 def test_draft_order_update_invalid_address(
@@ -3405,6 +3841,85 @@ def test_draft_order_update_free_shipping_voucher(
     assert data["order"]["id"] == variables["id"]
     order.refresh_from_db()
     assert order.voucher
+
+
+DRAFT_ORDER_UPDATE_USER_EMAIL_MUTATION = """
+    mutation draftUpdate(
+        $id: ID!
+        $userEmail: String!
+    ) {
+        draftOrderUpdate(
+            id: $id
+            input: {
+                userEmail: $userEmail
+            }
+        ) {
+            errors {
+                field
+                message
+                code
+            }
+            order {
+                id
+            }
+        }
+    }
+    """
+
+
+def test_draft_order_update_when_not_existing_customer_email_provided(
+    staff_api_client, permission_manage_orders, draft_order
+):
+    # given
+    order = draft_order
+    assert order.user
+
+    query = DRAFT_ORDER_UPDATE_USER_EMAIL_MUTATION
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    email = "notexisting@example.com"
+    variables = {"id": order_id, "userEmail": email}
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+    data = content["data"]["draftOrderUpdate"]
+    order.refresh_from_db()
+
+    # then
+    assert not data["errors"]
+    assert not order.user
+    assert order.user_email == email
+
+
+def test_draft_order_update_assign_user_when_existing_customer_email_provided(
+    staff_api_client, permission_manage_orders, draft_order
+):
+    # given
+    order = draft_order
+    user = order.user
+    user_email = user.email
+    order.user = None
+    order.save(update_fields=["user"])
+    assert not order.user
+
+    query = DRAFT_ORDER_UPDATE_USER_EMAIL_MUTATION
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    variables = {"id": order_id, "userEmail": user_email}
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+    data = content["data"]["draftOrderUpdate"]
+    order.refresh_from_db()
+
+    # then
+    assert not data["errors"]
+    assert order.user == user
+    assert order.user_email == user_email
 
 
 def test_draft_order_delete(staff_api_client, permission_manage_orders, draft_order):
@@ -3791,6 +4306,7 @@ DRAFT_ORDER_COMPLETE_MUTATION = """
             order {
                 status
                 origin
+                paymentStatus
             }
         }
     }
@@ -3823,7 +4339,71 @@ def test_draft_order_complete(
     order.refresh_from_db()
     assert data["status"] == order.status.upper()
     assert data["origin"] == OrderOrigin.DRAFT.upper()
-    assert order.search_document
+    assert order.search_vector
+
+    for line in order.lines.all():
+        allocation = line.allocations.get()
+        assert allocation.quantity_allocated == line.quantity_unfulfilled
+
+    # ensure there are only 2 events with correct types
+    event_params = {
+        "user": staff_user,
+        "type__in": [
+            order_events.OrderEvents.PLACED_FROM_DRAFT,
+            order_events.OrderEvents.CONFIRMED,
+        ],
+        "parameters": {},
+    }
+    matching_events = OrderEvent.objects.filter(**event_params)
+    assert matching_events.count() == 2
+    assert matching_events[0].type != matching_events[1].type
+    assert not OrderEvent.objects.exclude(**event_params).exists()
+    product_variant_out_of_stock_webhook_mock.assert_called_once_with(
+        Stock.objects.last()
+    )
+
+
+@patch("saleor.plugins.manager.PluginsManager.product_variant_out_of_stock")
+def test_draft_order_complete_0_total(
+    product_variant_out_of_stock_webhook_mock,
+    staff_api_client,
+    permission_manage_orders,
+    staff_user,
+    draft_order,
+):
+    """Ensure the payment status is FULLY_CHARGED when the total order price is 0."""
+    order = draft_order
+    price = zero_taxed_money(order.currency)
+    order.shipping_price = price
+    order.total = price
+    order.save(
+        update_fields=[
+            "shipping_price_net_amount",
+            "shipping_price_gross_amount",
+            "total_net_amount",
+            "total_gross_amount",
+        ]
+    )
+
+    # Ensure no events were created
+    assert not OrderEvent.objects.exists()
+
+    # Ensure no allocation were created
+    assert not Allocation.objects.filter(order_line__order=order).exists()
+
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    variables = {"id": order_id}
+    response = staff_api_client.post_graphql(
+        DRAFT_ORDER_COMPLETE_MUTATION, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+    data = content["data"]["draftOrderComplete"]["order"]
+    order.refresh_from_db()
+    assert data["status"] == order.status.upper()
+    assert data["origin"] == OrderOrigin.DRAFT.upper()
+    payment_charge_status = PaymentChargeStatusEnum.FULLY_CHARGED
+    assert data["paymentStatus"] == payment_charge_status.name
+    assert order.search_vector
 
     for line in order.lines.all():
         allocation = line.allocations.get()
@@ -4137,7 +4717,7 @@ def test_draft_order_complete_not_available_shipping_method(
     assert {error["field"] for error in data["errors"]} == {"shipping", "lines"}
 
 
-@mock.patch("saleor.plugins.manager.PluginsManager.excluded_shipping_methods_for_order")
+@patch("saleor.plugins.manager.PluginsManager.excluded_shipping_methods_for_order")
 def test_draft_order_complete_with_excluded_shipping_method(
     mocked_webhook,
     draft_order,
@@ -4169,7 +4749,7 @@ def test_draft_order_complete_with_excluded_shipping_method(
     assert data["errors"][0]["field"] == "shipping"
 
 
-@mock.patch("saleor.plugins.manager.PluginsManager.excluded_shipping_methods_for_order")
+@patch("saleor.plugins.manager.PluginsManager.excluded_shipping_methods_for_order")
 def test_draft_order_complete_with_not_excluded_shipping_method(
     mocked_webhook,
     draft_order,
@@ -4434,9 +5014,17 @@ def test_draft_order_complete_not_draft_order(
 
 
 ORDER_LINES_CREATE_MUTATION = """
-    mutation OrderLinesCreate($orderId: ID!, $variantId: ID!, $quantity: Int!) {
+    mutation OrderLinesCreate(
+            $orderId: ID!, $variantId: ID!, $quantity: Int!, $forceNewLine: Boolean
+        ) {
         orderLinesCreate(id: $orderId,
-                input: [{variantId: $variantId, quantity: $quantity}]) {
+                input: [
+                    {
+                        variantId: $variantId,
+                        quantity: $quantity,
+                        forceNewLine: $forceNewLine
+                    }
+                ]) {
 
             errors {
                 field
@@ -4592,9 +5180,6 @@ def test_order_lines_create(
     assert data["errors"][0]["variants"] == [variant_id]
     product_variant_out_of_stock_webhook_mock.assert_not_called()
 
-    order.refresh_from_db()
-    assert variant.sku.lower() in order.search_document
-
 
 @pytest.mark.parametrize("status", (OrderStatus.DRAFT, OrderStatus.UNCONFIRMED))
 @patch("saleor.plugins.manager.PluginsManager.draft_order_updated")
@@ -4714,6 +5299,112 @@ def test_order_lines_create_with_existing_variant(
     assert data["orderLines"][0]["productSku"] == variant.sku
     assert data["orderLines"][0]["productVariantId"] == variant.get_global_id()
     assert data["orderLines"][0]["quantity"] == old_quantity + quantity
+    assert_proper_webhook_called_once(
+        order, status, draft_order_updated_webhook_mock, order_updated_webhook_mock
+    )
+
+
+@pytest.mark.parametrize("status", (OrderStatus.DRAFT, OrderStatus.UNCONFIRMED))
+@patch("saleor.plugins.manager.PluginsManager.draft_order_updated")
+@patch("saleor.plugins.manager.PluginsManager.order_updated")
+def test_order_lines_create_with_same_variant_and_force_new_line(
+    order_updated_webhook_mock,
+    draft_order_updated_webhook_mock,
+    status,
+    order_with_lines,
+    permission_manage_orders,
+    staff_api_client,
+):
+    query = ORDER_LINES_CREATE_MUTATION
+    order = order_with_lines
+    order.status = status
+    order.save(update_fields=["status"])
+    lines = order.lines.all()
+    assert len(lines) == 2
+    line = lines[0]
+    variant = line.variant
+
+    quantity = 1
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    variant_id = graphene.Node.to_global_id("ProductVariant", variant.id)
+    variables = {
+        "orderId": order_id,
+        "variantId": variant_id,
+        "quantity": quantity,
+        "forceNewLine": True,
+    }
+
+    # mutation should fail without proper permissions
+    response = staff_api_client.post_graphql(query, variables)
+    assert_no_permission(response)
+    assert not OrderEvent.objects.exists()
+    order_updated_webhook_mock.assert_not_called()
+    draft_order_updated_webhook_mock.assert_not_called()
+
+    # assign permissions
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    response = staff_api_client.post_graphql(query, variables)
+    assert order.lines.count() == 3
+    assert OrderEvent.objects.count() == 1
+    assert OrderEvent.objects.last().type == order_events.OrderEvents.ADDED_PRODUCTS
+    content = get_graphql_content(response)
+    data = content["data"]["orderLinesCreate"]
+    assert data["orderLines"][0]["productSku"] == variant.sku
+    assert data["orderLines"][0]["productVariantId"] == variant.get_global_id()
+    assert data["orderLines"][0]["quantity"] == quantity
+    assert_proper_webhook_called_once(
+        order, status, draft_order_updated_webhook_mock, order_updated_webhook_mock
+    )
+
+
+@pytest.mark.parametrize("status", (OrderStatus.DRAFT, OrderStatus.UNCONFIRMED))
+@patch("saleor.plugins.manager.PluginsManager.draft_order_updated")
+@patch("saleor.plugins.manager.PluginsManager.order_updated")
+def test_order_lines_create_when_variant_already_in_multiple_lines(
+    order_updated_webhook_mock,
+    draft_order_updated_webhook_mock,
+    status,
+    order_with_lines,
+    permission_manage_orders,
+    staff_api_client,
+):
+    order = order_with_lines
+    order.status = status
+    order.save(update_fields=["status"])
+
+    line = order.lines.first()
+    variant = line.variant
+
+    # copy line and add to order
+    line.id = None
+    line.save()
+
+    assert order.lines.count() == 3
+
+    quantity = 1
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    variant_id = graphene.Node.to_global_id("ProductVariant", variant.id)
+    variables = {
+        "orderId": order_id,
+        "variantId": variant_id,
+        "quantity": quantity,
+        "forceNewLine": True,
+    }
+
+    # assign permissions
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    response = staff_api_client.post_graphql(ORDER_LINES_CREATE_MUTATION, variables)
+
+    assert order.lines.count() == 4
+    assert OrderEvent.objects.count() == 1
+    assert OrderEvent.objects.last().type == order_events.OrderEvents.ADDED_PRODUCTS
+    content = get_graphql_content(response)
+    data = content["data"]["orderLinesCreate"]
+    assert data["orderLines"][0]["productSku"] == variant.sku
+    assert data["orderLines"][0]["productVariantId"] == variant.get_global_id()
+    assert data["orderLines"][0]["quantity"] == quantity
     assert_proper_webhook_called_once(
         order, status, draft_order_updated_webhook_mock, order_updated_webhook_mock
     )
@@ -5265,11 +5956,10 @@ def test_retrieving_event_lines_with_deleted_line(
 ):
     order = order_with_lines
     lines = order_with_lines.lines.all()
-    quantities_per_lines = [(line.quantity, line) for line in lines]
 
     # Create the test event
     order_events.order_added_products_event(
-        order=order, user=staff_user, app=None, order_lines=quantities_per_lines
+        order=order, user=staff_user, app=None, order_lines=lines
     )
 
     # Delete a line
@@ -5284,9 +5974,10 @@ def test_retrieving_event_lines_with_deleted_line(
     data = content["data"]["orders"]["edges"][0]["node"]["events"][0]
 
     # Check every line is returned and the one deleted is None
-    assert len(data["lines"]) == len(quantities_per_lines)
-    for expected_data, received_line in zip(quantities_per_lines, data["lines"]):
-        quantity, line = expected_data
+    assert len(data["lines"]) == len(lines)
+    for expected_data, received_line in zip(lines, data["lines"]):
+        quantity = expected_data.quantity
+        line = expected_data
 
         if line is deleted_line:
             assert received_line["orderLine"] is None
@@ -5304,11 +5995,10 @@ def test_retrieving_event_lines_with_missing_line_pk_in_data(
 ):
     order = order_with_lines
     line = order_with_lines.lines.first()
-    quantities_per_lines = [(line.quantity, line)]
 
     # Create the test event
     event = order_events.order_added_products_event(
-        order=order, user=staff_user, app=None, order_lines=quantities_per_lines
+        order=order, user=staff_user, app=None, order_lines=[line]
     )
     del event.parameters["lines"][0]["line_pk"]
     event.save(update_fields=["parameters"])
@@ -5341,6 +6031,10 @@ ORDER_LINE_DELETE_MUTATION = """
                 id
                 total{
                     gross{
+                        currency
+                        amount
+                    }
+                    net {
                         currency
                         amount
                     }
@@ -5400,10 +6094,6 @@ def test_order_line_remove_with_back_in_stock_webhook(
         )
     ) == 3
     back_in_stock_webhook_mock.assert_called_once_with(Stock.objects.first())
-
-    order.refresh_from_db()
-    assert order.search_document
-    assert line.product_sku not in order.search_document
 
 
 @pytest.mark.parametrize("status", (OrderStatus.DRAFT, OrderStatus.UNCONFIRMED))
@@ -5515,9 +6205,6 @@ def test_order_update(
     assert order.user_email == email
     assert order.user is None
     assert order.status == OrderStatus.UNFULFILLED
-    assert graphql_address_data["firstName"].lower() in order.search_document
-    assert graphql_address_data["lastName"].lower() in order.search_document
-    assert email.lower() in order.search_document
     order_updated_webhook_mock.assert_called_once_with(order)
 
 
@@ -5876,22 +6563,30 @@ ORDER_CAPTURE_MUTATION = """
 """
 
 
-@mock.patch("saleor.plugins.manager.PluginsManager.notify")
+@patch("saleor.giftcard.utils.fulfill_non_shippable_gift_cards")
+@patch("saleor.plugins.manager.PluginsManager.notify")
 def test_order_capture(
     mocked_notify,
-    channel_USD,
+    fulfill_non_shippable_gift_cards_mock,
     staff_api_client,
     permission_manage_orders,
     payment_txn_preauth,
     staff_user,
+    site_settings,
 ):
+    # given
     order = payment_txn_preauth.order
+
     order_id = graphene.Node.to_global_id("Order", order.id)
     amount = float(payment_txn_preauth.total)
     variables = {"id": order_id, "amount": amount}
+
+    # when
     response = staff_api_client.post_graphql(
         ORDER_CAPTURE_MUTATION, variables, permissions=[permission_manage_orders]
     )
+
+    # then
     content = get_graphql_content(response)
     data = content["data"]["orderCapture"]["order"]
     order.refresh_from_db()
@@ -5935,6 +6630,100 @@ def test_order_capture(
         expected_payment_payload,
         channel_slug=order.channel.slug,
     )
+    fulfill_non_shippable_gift_cards_mock.assert_called_once_with(
+        order, list(order.lines.all()), site_settings, staff_api_client.user, None, ANY
+    )
+
+
+@patch("saleor.plugins.manager.PluginsManager.is_event_active_for_any_plugin")
+@patch("saleor.plugins.manager.PluginsManager.transaction_action_request")
+def test_order_charge_with_transaction_action_request(
+    mocked_transaction_action_request,
+    mocked_is_active,
+    staff_api_client,
+    permission_manage_orders,
+    order,
+):
+    # given
+    transaction = TransactionItem.objects.create(
+        status="Authorized",
+        type="Credit card",
+        reference="PSP ref",
+        available_actions=["charge", "void"],
+        currency="USD",
+        order_id=order.pk,
+        authorized_value=Decimal("10"),
+    )
+    charge_value = Decimal(5.0)
+    mocked_is_active.return_value = True
+    order_id = to_global_id_or_none(order)
+
+    variables = {"id": order_id, "amount": charge_value}
+
+    # when
+    response = staff_api_client.post_graphql(
+        ORDER_CAPTURE_MUTATION, variables, permissions=[permission_manage_orders]
+    )
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["orderCapture"]
+    assert not data["errors"]
+
+    assert mocked_is_active.called
+    mocked_transaction_action_request.assert_called_once_with(
+        TransactionActionData(
+            transaction=transaction,
+            action_type=TransactionAction.CHARGE,
+            action_value=charge_value,
+        ),
+        channel_slug=order.channel.slug,
+    )
+
+    event = order.events.first()
+    assert event.type == OrderEvents.TRANSACTION_CAPTURE_REQUESTED
+    assert Decimal(event.parameters["amount"]) == charge_value
+    assert event.parameters["reference"] == transaction.reference
+
+
+@patch("saleor.plugins.manager.PluginsManager.is_event_active_for_any_plugin")
+def test_order_capture_with_transaction_action_request_missing_event(
+    mocked_is_active, staff_api_client, permission_manage_orders, order
+):
+    # given
+    authorization_value = Decimal("10")
+    TransactionItem.objects.create(
+        status="Authorized",
+        type="Credit card",
+        reference="PSP ref",
+        available_actions=["capture", "void"],
+        currency="USD",
+        order_id=order.pk,
+        authorized_value=authorization_value,
+    )
+    mocked_is_active.return_value = False
+
+    order_id = to_global_id_or_none(order)
+
+    variables = {"id": order_id, "amount": authorization_value}
+
+    # when
+    response = staff_api_client.post_graphql(
+        ORDER_CAPTURE_MUTATION, variables, permissions=[permission_manage_orders]
+    )
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["orderCapture"]
+    assert len(data["errors"]) == 1
+    assert data["errors"][0]["message"] == (
+        "No app or plugin is configured to handle payment action requests."
+    )
+    assert data["errors"][0]["code"] == (
+        OrderErrorCode.MISSING_TRANSACTION_ACTION_REQUEST_WEBHOOK.name
+    )
+
+    assert mocked_is_active.called
 
 
 @patch("saleor.plugins.manager.PluginsManager.is_event_active_for_any_plugin")
@@ -6098,7 +6887,6 @@ def test_order_mark_as_paid_with_external_reference(
     assert event_reference == transaction_reference
     order_payments = order.payments.filter(psp_reference=transaction_reference)
     assert order_payments.count() == 1
-    assert transaction_reference in order.search_document
 
 
 def test_order_mark_as_paid(
@@ -6138,6 +6926,42 @@ def test_order_mark_as_paid_no_billing_address(
     content = get_graphql_content(response)
     data = content["data"]["orderMarkAsPaid"]["errors"]
     assert data[0]["code"] == OrderErrorCode.BILLING_ADDRESS_NOT_SET.name
+
+
+def test_draft_order_mark_as_paid_check_price_recalculation(
+    staff_api_client, permission_manage_orders, order_with_lines, staff_user
+):
+    # given
+    order = order_with_lines
+    # we need to change order total and set it as invalidated prices.
+    # we couldn't use `order.total.gross` because this test don't use any tax app
+    # or plugin.
+    expected_total_net = order.total.net
+    expected_total = TaxedMoney(net=expected_total_net, gross=expected_total_net)
+    order.total = TaxedMoney(net=Money(0, "USD"), gross=Money(0, "USD"))
+    order.should_refresh_prices = True
+    order.status = OrderStatus.DRAFT
+    order.save()
+    query = MUTATION_MARK_ORDER_AS_PAID
+    order_id = graphene.Node.to_global_id("Order", order.id)
+    variables = {"id": order_id}
+
+    # when
+    response = staff_api_client.post_graphql(
+        query, variables, permissions=[permission_manage_orders]
+    )
+    content = get_graphql_content(response)
+
+    # then
+    data = content["data"]["orderMarkAsPaid"]["order"]
+    order.refresh_from_db()
+    assert order.total == expected_total
+    payment = order.payments.get()
+    assert payment.total == expected_total_net.amount
+    assert data["isPaid"] is True is order.is_fully_paid()
+    event_order_paid = order.events.first()
+    assert event_order_paid.type == order_events.OrderEvents.ORDER_MARKED_AS_PAID
+    assert event_order_paid.user == staff_user
 
 
 ORDER_VOID = """
@@ -6624,6 +7448,11 @@ ORDER_UPDATE_SHIPPING_QUERY = """
             }
             order {
                 id
+                total {
+                    gross {
+                        amount
+                    }
+                }
             }
         }
     }
@@ -6727,9 +7556,13 @@ def test_order_update_shipping_tax_included(
     shipping_total = shipping_method.channel_listings.get(
         channel_id=order.channel_id
     ).get_total()
+    shipping_price = TaxedMoney(
+        shipping_total / Decimal("1.19"), shipping_total
+    ).quantize()
     assert order.status == OrderStatus.UNCONFIRMED
     assert order.shipping_method == shipping_method
-    assert order.shipping_price_gross == shipping_total
+    assert order.shipping_price_net == shipping_price.net
+    assert order.shipping_price_gross == shipping_price.gross
     assert order.shipping_tax_rate == Decimal("0.19")
     assert order.shipping_method_name == shipping_method.name
 
@@ -7523,6 +8356,63 @@ def test_order_query_address_without_order_user(
     order = content["data"]["orderByToken"]
     assert order["shippingAddress"] is not None
     assert order["billingAddress"] is not None
+
+
+QUERY_ORDER_LINE_STOCKS = """
+query OrderQuery($id: ID!) {
+    order(id: $id) {
+        number
+        lines {
+            id
+            quantity
+            quantityFulfilled
+            variant {
+                id
+                name
+                sku
+                stocks {
+                    warehouse {
+                        id
+                        name
+                    }
+                }
+            }
+        }
+    }
+}
+"""
+
+
+def test_query_order_line_stocks(
+    staff_api_client,
+    permission_manage_orders,
+    order_with_lines_for_cc,
+    warehouse,
+    warehouse_for_cc,
+):
+    """Ensure that stocks for normal and click and collect warehouses are returned."""
+    # given
+    order = order_with_lines_for_cc
+    variant = order.lines.first().variant
+    variables = {"id": graphene.Node.to_global_id("Order", order.id)}
+
+    # create the variant stock for not click and collect warehouse
+    Stock.objects.create(warehouse=warehouse, product_variant=variant, quantity=10)
+
+    # when
+    response = staff_api_client.post_graphql(
+        QUERY_ORDER_LINE_STOCKS, variables, permissions=(permission_manage_orders,)
+    )
+
+    # then
+    content = get_graphql_content(response)
+    order_data = content["data"]["order"]
+    assert order_data
+    assert len(order_data["lines"]) == 1
+    assert {
+        stock["warehouse"]["name"]
+        for stock in order_data["lines"][0]["variant"]["stocks"]
+    } == {warehouse.name, warehouse_for_cc.name}
 
 
 MUTATION_ORDER_BULK_CANCEL = """
@@ -8476,7 +9366,6 @@ def test_query_draft_orders_with_sort(
         ({"search": "discount name"}, 2),
         ({"search": "Some other"}, 1),
         ({"search": "translated"}, 1),
-        ({"search": "user_email"}, 2),
         ({"search": "test@mirumee.com"}, 1),
         ({"search": "Leslie"}, 1),
         ({"search": "Wade"}, 1),
@@ -8561,8 +9450,10 @@ def test_orders_query_with_filter_search(
         tax_rate=Decimal("0.23"),
     )
     for order in orders:
-        order.search_document = prepare_order_search_document_value(order)
-    Order.objects.bulk_update(orders, ["search_document"])
+        order.search_vector = FlatConcatSearchVector(
+            *prepare_order_search_vector_value(order)
+        )
+    Order.objects.bulk_update(orders, ["search_vector"])
 
     variables = {"filter": orders_filter}
     staff_api_client.user.user_permissions.add(permission_manage_orders)
@@ -8603,8 +9494,10 @@ def test_orders_query_with_filter_search_by_global_payment_id(
     payment = Payment.objects.create(order=order_with_payment)
     global_id = graphene.Node.to_global_id("Payment", payment.pk)
     for order in orders:
-        order.search_document = prepare_order_search_document_value(order)
-    Order.objects.bulk_update(orders, ["search_document"])
+        order.search_vector = FlatConcatSearchVector(
+            *prepare_order_search_vector_value(order)
+        )
+    Order.objects.bulk_update(orders, ["search_vector"])
 
     variables = {"filter": {"search": global_id}}
     staff_api_client.user.user_permissions.add(permission_manage_orders)
@@ -8615,11 +9508,11 @@ def test_orders_query_with_filter_search_by_global_payment_id(
 
 def test_orders_query_with_filter_search_by_number(
     orders_query_with_filter,
-    order_with_search_document_value,
+    order_with_search_vector_value,
     staff_api_client,
     permission_manage_orders,
 ):
-    order = order_with_search_document_value
+    order = order_with_search_vector_value
     variables = {"filter": {"search": order.number}}
     staff_api_client.user.user_permissions.add(permission_manage_orders)
     response = staff_api_client.post_graphql(orders_query_with_filter, variables)
@@ -8629,11 +9522,11 @@ def test_orders_query_with_filter_search_by_number(
 
 def test_orders_query_with_filter_search_by_number_with_hash(
     orders_query_with_filter,
-    order_with_search_document_value,
+    order_with_search_vector_value,
     staff_api_client,
     permission_manage_orders,
 ):
-    order = order_with_search_document_value
+    order = order_with_search_vector_value
     variables = {"filter": {"search": f"#{order.number}"}}
     staff_api_client.user.user_permissions.add(permission_manage_orders)
     response = staff_api_client.post_graphql(orders_query_with_filter, variables)
@@ -8672,7 +9565,7 @@ def test_order_query_with_filter_search_by_product_sku_order_line(
     """
     order = order_line.order
     order.refresh_from_db()
-    update_order_search_document(order)
+    update_order_search_vector(order)
 
     variables = {"filter": {"search": order_line.product_sku}}
     response = staff_api_client.post_graphql(
@@ -8888,7 +9781,7 @@ def test_order_query_with_filter_search_by_product_sku_multi_order_lines(
         ]
     )
     order.refresh_from_db()
-    update_order_search_document(order)
+    update_order_search_vector(order)
 
     variables = {"filter": {"search": lines[0].product_sku}}
     response = staff_api_client.post_graphql(
@@ -8904,7 +9797,6 @@ def test_order_query_with_filter_search_by_product_sku_multi_order_lines(
         ({"search": "discount name"}, 2),
         ({"search": "Some other"}, 1),
         ({"search": "translated"}, 1),
-        ({"search": "user_email"}, 2),
         ({"search": "test@mirumee.com"}, 1),
         ({"search": "Leslie"}, 1),
         ({"search": "leslie wade"}, 1),
@@ -8960,8 +9852,10 @@ def test_draft_orders_query_with_filter_search(
         ]
     )
     for order in orders:
-        order.search_document = prepare_order_search_document_value(order)
-    Order.objects.bulk_update(orders, ["search_document"])
+        order.search_vector = FlatConcatSearchVector(
+            *prepare_order_search_vector_value(order)
+        )
+    Order.objects.bulk_update(orders, ["search_vector"])
 
     variables = {"filter": draft_orders_filter}
 
@@ -8977,7 +9871,7 @@ def test_draft_orders_query_with_filter_search_by_number(
     staff_api_client,
     permission_manage_orders,
 ):
-    update_order_search_document(draft_order)
+    update_order_search_vector(draft_order)
     variables = {"filter": {"search": draft_order.number}}
     staff_api_client.user.user_permissions.add(permission_manage_orders)
     response = staff_api_client.post_graphql(draft_orders_query_with_filter, variables)
@@ -8991,7 +9885,7 @@ def test_draft_orders_query_with_filter_search_by_number_with_hash(
     staff_api_client,
     permission_manage_orders,
 ):
-    update_order_search_document(draft_order)
+    update_order_search_vector(draft_order)
     variables = {"filter": {"search": f"#{draft_order.number}"}}
     staff_api_client.user.user_permissions.add(permission_manage_orders)
     response = staff_api_client.post_graphql(draft_orders_query_with_filter, variables)
@@ -9442,9 +10336,9 @@ def test_draft_order_properly_recalculate_total_after_shipping_product_removed(
     line.save()
 
     query = ORDER_LINE_DELETE_MUTATION
-    line = order.lines.get(product_sku="SKU_B")
-    line_id = graphene.Node.to_global_id("OrderLine", line.id)
-    variables = {"id": line_id}
+    line_2 = order.lines.get(product_sku="SKU_B")
+    line_2_id = graphene.Node.to_global_id("OrderLine", line_2.id)
+    variables = {"id": line_2_id}
 
     response = staff_api_client.post_graphql(
         query, variables, permissions=[permission_manage_orders]
@@ -9452,9 +10346,10 @@ def test_draft_order_properly_recalculate_total_after_shipping_product_removed(
     content = get_graphql_content(response)
     data = content["data"]["orderLineDelete"]
 
-    assert data["order"]["total"]["gross"]["amount"] == float(
-        order.total_gross_amount
-    ) - float(line.total_price_gross_amount)
+    order.refresh_from_db()
+    assert data["order"]["total"]["net"]["amount"] == float(
+        line.total_price_net_amount
+    ) + float(order.shipping_price_net_amount)
 
 
 ORDER_UPDATE_SHIPPING_QUERY_WITH_TOTAL = """
@@ -9637,3 +10532,239 @@ def test_order_by_token_query_payment_details_available_fields_with_permissions(
     content = get_graphql_content(response)
 
     assert_order_and_payment_ids(content, payment_txn_captured)
+
+
+SEARCH_ORDERS_QUERY = """
+    query Orders(
+        $filters: OrderFilterInput,
+        $sortBy: OrderSortingInput,
+        $after: String,
+    ) {
+        orders(
+            first: 5,
+            filter: $filters,
+            sortBy: $sortBy,
+            after: $after,
+        ) {
+            edges {
+                node {
+                    id
+                }
+                cursor
+            }
+        }
+    }
+"""
+
+
+def test_sort_order_by_rank_without_search(staff_api_client, permission_manage_orders):
+    staff_api_client.user.user_permissions.add(permission_manage_orders)
+
+    variables = {
+        "sortBy": {"field": "RANK", "direction": "DESC"},
+    }
+    response = staff_api_client.post_graphql(SEARCH_ORDERS_QUERY, variables)
+    content = get_graphql_content(response, ignore_errors=True)
+
+    assert "errors" in content
+    assert (
+        content["errors"][0]["message"]
+        == "Sorting by RANK is available only when using a search filter."
+    )
+
+
+@pytest.mark.parametrize(
+    "fun_to_patch, price_name",
+    [
+        ("order_total", "total"),
+        ("order_undiscounted_total", "undiscountedTotal"),
+        ("order_shipping", "shippingPrice"),
+    ],
+)
+def test_order_resolver_tax_recalculation(
+    staff_api_client,
+    permission_manage_orders,
+    order_with_lines,
+    fun_to_patch,
+    price_name,
+):
+    # given
+    price = TaxedMoney(
+        net=Money(amount="1234.56", currency="USD"),
+        gross=Money(amount="1267.89", currency="USD"),
+    )
+    order = order_with_lines
+    order.status = OrderStatus.UNCONFIRMED
+    order.should_refresh_prices = True
+    order.save()
+
+    order_id = graphene.Node.to_global_id("Order", order.id)
+
+    query = (
+        """
+    query OrderPrices($id: ID!) {
+        order(id: $id) {
+            %s { net { amount } gross { amount } }
+        }
+    }
+    """
+        % price_name
+    )
+    variables = {"id": order_id}
+
+    # when
+    with patch(
+        f"saleor.order.calculations.{fun_to_patch}", new=Mock(return_value=price)
+    ):
+        response = staff_api_client.post_graphql(
+            query,
+            variables,
+            permissions=[permission_manage_orders],
+            check_no_permissions=False,
+        )
+        content = get_graphql_content(response)
+        data = content["data"]["order"]
+
+    # then
+    assert str(data[price_name]["net"]["amount"]) == str(price.net.amount)
+    assert str(data[price_name]["gross"]["amount"]) == str(price.gross.amount)
+
+
+ORDER_LINE_PRICE_DATA = OrderTaxedPricesData(
+    price_with_discounts=TaxedMoney(
+        net=Money(amount="1234.56", currency="USD"),
+        gross=Money(amount="1267.89", currency="USD"),
+    ),
+    undiscounted_price=TaxedMoney(
+        net=Money(amount="7234.56", currency="USD"),
+        gross=Money(amount="7267.89", currency="USD"),
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "fun_to_patch, price_name, expected_price",
+    [
+        ("order_line_unit", "unitPrice", ORDER_LINE_PRICE_DATA.price_with_discounts),
+        (
+            "order_line_unit",
+            "undiscountedUnitPrice",
+            ORDER_LINE_PRICE_DATA.undiscounted_price,
+        ),
+        ("order_line_total", "totalPrice", ORDER_LINE_PRICE_DATA.price_with_discounts),
+    ],
+)
+def test_order_line_resolver_tax_recalculation(
+    staff_api_client,
+    permission_manage_orders,
+    order_with_lines,
+    fun_to_patch,
+    price_name,
+    expected_price,
+):
+    # given
+    order = order_with_lines
+    order.status = OrderStatus.UNCONFIRMED
+    order.should_refresh_prices = True
+    order.save()
+
+    order.lines.last().delete()
+
+    order_id = graphene.Node.to_global_id("Order", order.id)
+
+    query = (
+        """
+    query OrderLinePrices($id: ID!) {
+        order(id: $id) {
+            lines {
+                %s { net { amount } gross { amount } }
+            }
+        }
+    }
+    """
+        % price_name
+    )
+    variables = {"id": order_id}
+
+    # when
+    with patch(
+        f"saleor.order.calculations.{fun_to_patch}",
+        new=Mock(return_value=ORDER_LINE_PRICE_DATA),
+    ):
+        response = staff_api_client.post_graphql(
+            query,
+            variables,
+            permissions=[permission_manage_orders],
+            check_no_permissions=False,
+        )
+        content = get_graphql_content(response)
+        data = content["data"]["order"]["lines"][0]
+
+    # then
+    assert str(data[price_name]["net"]["amount"]) == str(expected_price.net.amount)
+    assert str(data[price_name]["gross"]["amount"]) == str(expected_price.gross.amount)
+
+
+ORDER_SHIPPING_TAX_RATE_QUERY = """
+query OrderShippingTaxRate($id: ID!) {
+    order(id: $id) {
+        shippingTaxRate
+    }
+}
+"""
+
+
+ORDER_LINE_TAX_RATE_QUERY = """
+query OrderLineTaxRate($id: ID!) {
+    order(id: $id) {
+        lines {
+            taxRate
+        }
+    }
+}
+"""
+
+
+@pytest.mark.parametrize(
+    "query, fun_to_patch, path",
+    [
+        (ORDER_SHIPPING_TAX_RATE_QUERY, "order_shipping_tax_rate", ["shippingTaxRate"]),
+        (ORDER_LINE_TAX_RATE_QUERY, "order_line_tax_rate", ["lines", 0, "taxRate"]),
+    ],
+)
+def test_order_tax_rate_resolver_tax_recalculation(
+    staff_api_client,
+    permission_manage_orders,
+    order_with_lines,
+    query,
+    fun_to_patch,
+    path,
+):
+    # given
+    tax_rate = Decimal("0.01")
+    order = order_with_lines
+    order.status = OrderStatus.UNCONFIRMED
+    order.should_refresh_prices = True
+    order.save()
+
+    order.lines.last().delete()
+
+    order_id = graphene.Node.to_global_id("Order", order.id)
+
+    variables = {"id": order_id}
+
+    # when
+    with patch(
+        f"saleor.order.calculations.{fun_to_patch}", new=Mock(return_value=tax_rate)
+    ):
+        response = staff_api_client.post_graphql(
+            query,
+            variables,
+            permissions=[permission_manage_orders],
+            check_no_permissions=False,
+        )
+        content = get_graphql_content(response)
+        data = content["data"]["order"]
+
+    # then
+    assert str(reduce(getitem, path, data)) == str(tax_rate)

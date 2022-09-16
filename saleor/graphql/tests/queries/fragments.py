@@ -215,10 +215,10 @@ fragment AddressDetails on Address {
     """
 
 
-USER_DETAILS = (
+CUSTOMER_DETAILS = (
     ADDRESS_DETAILS
     + """
-fragment UserDetails on User {
+fragment CustomerDetails on User {
   email
   firstName
   lastName
@@ -237,6 +237,16 @@ fragment UserDetails on User {
 }
 """
 )
+
+STAFF_DETAILS = """
+fragment StaffDetails on User {
+  email
+  firstName
+  lastName
+  isStaff
+  isActive
+}
+"""
 
 
 BASIC_PRODUCT_FIELDS = """
@@ -297,6 +307,32 @@ fragment PageDetails on Page{
 }
 
 """
+
+
+PAGE_TYPE_DETAILS = """
+fragment PageTypeDetails on PageType{
+  id
+  name
+  slug
+  attributes {
+    slug
+  }
+}
+"""
+
+
+PERMISSION_GROUP_DETAILS = """
+fragment PermissionGroupDetails on Group{
+  name
+  permissions {
+    name
+  }
+  users {
+    email
+  }
+}
+"""
+
 
 SALE_DETAILS = """
 fragment SaleDetails on Sale {
@@ -360,4 +396,33 @@ MENU_ITEM_DETAILS = """
             id
         }
     }
+"""
+
+ATTRIBUTE_DETAILS = """
+fragment AttributeDetails on Attribute {
+  name
+  slug
+  type
+  inputType
+}
+"""
+
+ATTRIBUTE_VALUE_DETAILS = """
+fragment AttributeValueDetails on AttributeValue {
+  name
+  slug
+  value
+}
+"""
+
+PAYMENT_DETAILS = """
+fragment PaymentDetails on Payment {
+  id
+  total {
+    amount
+    currency
+  }
+  isActive
+  gateway
+}
 """

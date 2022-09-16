@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from django.conf import settings
+from django.contrib.sites.models import Site
 from requests import RequestException, TooManyRedirects
 
 from ....app.models import App
@@ -14,12 +15,14 @@ from ....payment import PaymentError, TransactionKind
 from ....payment.utils import create_payment_information
 from ....webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
 from ....webhook.models import Webhook, WebhookEvent
+from .. import signature_for_payload
 from ..tasks import send_webhook_request_sync, trigger_webhook_sync
 from ..utils import (
     parse_list_payment_gateways_response,
     parse_payment_action_response,
     to_payment_app_id,
 )
+from .utils import generate_request_headers
 
 
 @pytest.fixture
@@ -50,6 +53,24 @@ def test_trigger_webhook_sync(mock_request, payment_app):
     trigger_webhook_sync(WebhookEventSyncType.PAYMENT_CAPTURE, data, payment_app)
     event_delivery = EventDelivery.objects.first()
     mock_request.assert_called_once_with(payment_app.name, event_delivery)
+
+
+@mock.patch("saleor.plugins.webhook.tasks.create_delivery_for_subscription_sync_event")
+@mock.patch("saleor.plugins.webhook.tasks.send_webhook_request_sync")
+def test_trigger_webhook_sync_with_subscription(
+    mock_request,
+    mock_delivery_create,
+    payment,
+    payment_app_with_subscription_webhooks,
+):
+    payment_app = payment_app_with_subscription_webhooks
+    data = '{"key": "value"}'
+    fake_delivery = "fake_delivery"
+    mock_delivery_create.return_value = fake_delivery
+    trigger_webhook_sync(
+        WebhookEventSyncType.PAYMENT_CAPTURE, data, payment_app, payment
+    )
+    mock_request.assert_called_once_with(payment_app.name, fake_delivery)
 
 
 @mock.patch("saleor.plugins.webhook.tasks.send_webhook_request_sync")
@@ -153,6 +174,17 @@ def test_send_webhook_request_sync_successful_attempt(
 def test_send_webhook_request_sync_request_exception(
     mock_post, mock_observability, app, event_delivery
 ):
+    # given
+    event_payload = event_delivery.payload
+    data = event_payload.payload
+    webhook = event_delivery.webhook
+    domain = Site.objects.get_current().domain
+    message = data.encode("utf-8")
+    signature = signature_for_payload(message, webhook.secret_key)
+    expected_request_headers = generate_request_headers(
+        event_delivery.event_type, domain, signature
+    )
+
     # when
     response_data = send_webhook_request_sync(app.name, event_delivery)
     attempt = EventDeliveryAttempt.objects.first()
@@ -164,7 +196,7 @@ def test_send_webhook_request_sync_request_exception(
     assert attempt.response == ""
     assert attempt.response_headers == "null"
     assert attempt.response_status_code is None
-    assert attempt.request_headers == "null"
+    assert json.loads(attempt.request_headers) == expected_request_headers
     assert response_data is None
     mock_observability.assert_called_once_with(attempt)
 

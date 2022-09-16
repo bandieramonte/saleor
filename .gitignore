@@ -24,7 +24,7 @@ dist/
 .env
 .venv
 env/
-venv/
+saleor-venv/
 ENV/
 env.bak/
 venv.bak/

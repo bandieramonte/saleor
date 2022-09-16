@@ -3,23 +3,25 @@ from copy import copy
 
 import graphene
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
 from ....account import events as account_events
 from ....account import models, utils
 from ....account.error_codes import AccountErrorCode
 from ....account.notifications import send_set_password_notification
 from ....account.search import USER_SEARCH_FIELDS, prepare_user_search_document_value
-from ....account.thumbnails import create_user_avatar_thumbnails
 from ....account.utils import (
     remove_staff_member,
     remove_the_oldest_user_address_if_address_limit_is_reached,
 )
 from ....checkout import AddressType
+from ....core.exceptions import PermissionDenied
 from ....core.permissions import AccountPermissions, AuthorizationFilters
 from ....core.tracing import traced_atomic_transaction
 from ....core.utils.url import validate_storefront_url
 from ....giftcard.utils import assign_user_gift_cards
 from ....order.utils import match_orders_with_new_user
+from ....thumbnail import models as thumbnail_models
 from ...account.enums import AddressTypeEnum
 from ...account.types import Address, AddressInput, User
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
@@ -110,6 +112,8 @@ class CustomerUpdate(CustomerCreate):
         # Compare the data
         has_new_name = old_instance.get_full_name() != new_fullname
         has_new_email = old_instance.email != new_email
+        was_activated = not old_instance.is_active and new_instance.is_active
+        was_deactivated = old_instance.is_active and not new_instance.is_active
 
         # Generate the events accordingly
         if has_new_email:
@@ -121,6 +125,18 @@ class CustomerUpdate(CustomerCreate):
         if has_new_name:
             account_events.assigned_name_to_a_customer_event(
                 staff_user=staff_user, app=app, new_name=new_fullname
+            )
+        if was_activated:
+            account_events.customer_account_activated_event(
+                staff_user=info.context.user,
+                app=info.context.app,
+                account_id=old_instance.id,
+            )
+        if was_deactivated:
+            account_events.customer_account_deactivated_event(
+                staff_user=info.context.user,
+                app=info.context.app,
+                account_id=old_instance.id,
             )
 
     @classmethod
@@ -173,6 +189,10 @@ class CustomerDelete(CustomerDeleteMixin, UserDelete):
         cls.post_process(info)
         return results
 
+    @classmethod
+    def post_save_action(cls, info, instance, cleaned_input):
+        info.context.plugins.customer_deleted(instance)
+
 
 class StaffCreate(ModelMutation):
     class Arguments:
@@ -181,13 +201,24 @@ class StaffCreate(ModelMutation):
         )
 
     class Meta:
-        description = "Creates a new staff user."
+        description = (
+            "Creates a new staff user. "
+            "Apps are not allowed to perform this mutation."
+        )
         exclude = ["password"]
         model = models.User
         object_type = User
         permissions = (AccountPermissions.MANAGE_STAFF,)
         error_type_class = StaffError
         error_type_field = "staff_errors"
+
+    @classmethod
+    def check_permissions(cls, context, permissions=None):
+        if context.app:
+            raise PermissionDenied(
+                message="Apps are not allowed to perform this mutation."
+            )
+        return super().check_permissions(context, permissions)
 
     @classmethod
     def clean_input(cls, info, instance, data):
@@ -249,13 +280,13 @@ class StaffCreate(ModelMutation):
         pass
 
     @classmethod
-    def save(cls, info, user, cleaned_input):
+    def save(cls, info, user, cleaned_input, send_notification=True):
         if any([field in cleaned_input for field in USER_SEARCH_FIELDS]):
             user.search_document = prepare_user_search_document_value(
                 user, attach_addresses_data=False
             )
         user.save()
-        if cleaned_input.get("redirect_url"):
+        if cleaned_input.get("redirect_url") and send_notification:
             send_set_password_notification(
                 redirect_url=cleaned_input.get("redirect_url"),
                 user=user,
@@ -272,6 +303,39 @@ class StaffCreate(ModelMutation):
         if groups:
             instance.groups.add(*groups)
 
+    @classmethod
+    def post_save_action(cls, info, instance, cleaned_input):
+        info.context.plugins.staff_created(instance)
+
+    @classmethod
+    def get_instance(cls, info, **data):
+        object_id = data.get("id")
+        email = data.get("input", {}).get("email")
+        send_notification = True
+
+        if (
+            not object_id
+            and email
+            and (
+                user := models.User.objects.filter(email=email, is_staff=False).first()
+            )
+        ):
+            send_notification = False
+            return user, send_notification
+        return super().get_instance(info, **data), send_notification
+
+    @classmethod
+    def perform_mutation(cls, _root, info, **data):
+        instance, send_notification = cls.get_instance(info, **data)
+        data = data.get("input")
+        cleaned_input = cls.clean_input(info, instance, data)
+        instance = cls.construct_instance(instance, cleaned_input)
+        cls.clean_instance(info, instance)
+        cls.save(info, instance, cleaned_input, send_notification)
+        cls._save_m2m(info, instance, cleaned_input)
+        cls.post_save_action(info, instance, cleaned_input)
+        return cls.success_response(instance)
+
 
 class StaffUpdate(StaffCreate):
     class Arguments:
@@ -281,7 +345,10 @@ class StaffUpdate(StaffCreate):
         )
 
     class Meta:
-        description = "Updates an existing staff user."
+        description = (
+            "Updates an existing staff user. "
+            "Apps are not allowed to perform this mutation."
+        )
         exclude = ["password"]
         model = models.User
         object_type = User
@@ -401,7 +468,7 @@ class StaffUpdate(StaffCreate):
 
     @classmethod
     def perform_mutation(cls, _root, info, **data):
-        instance = cls.get_instance(info, **data)
+        instance, _ = cls.get_instance(info, **data)
         old_email = instance.email
         response = super().perform_mutation(_root, info, **data)
         user = response.user
@@ -410,10 +477,16 @@ class StaffUpdate(StaffCreate):
             match_orders_with_new_user(user)
         return response
 
+    @classmethod
+    def post_save_action(cls, info, instance, cleaned_input):
+        info.context.plugins.staff_updated(instance)
+
 
 class StaffDelete(StaffDeleteMixin, UserDelete):
     class Meta:
-        description = "Deletes a staff user."
+        description = (
+            "Deletes a staff user. Apps are not allowed to perform this mutation."
+        )
         model = models.User
         object_type = User
         permissions = (AccountPermissions.MANAGE_STAFF,)
@@ -434,7 +507,11 @@ class StaffDelete(StaffDeleteMixin, UserDelete):
         # After the instance is deleted, set its ID to the original database's
         # ID so that the success response contains ID of the deleted object.
         instance.id = db_id
-        return cls.success_response(instance)
+
+        response = cls.success_response(instance)
+        info.context.plugins.staff_deleted(instance)
+
+        return response
 
 
 class AddressCreate(ModelMutation):
@@ -474,6 +551,10 @@ class AddressCreate(ModelMutation):
             user.search_document = prepare_user_search_document_value(user)
             user.save(update_fields=["search_document", "updated_at"])
         return response
+
+    @classmethod
+    def post_save_action(cls, info, instance, cleaned_input):
+        transaction.on_commit(lambda: info.context.plugins.address_created(instance))
 
 
 class AddressUpdate(BaseAddressUpdate):
@@ -567,11 +648,10 @@ class UserAvatarUpdate(BaseMutation):
         validate_image_file(image_data, "image", AccountErrorCode)
         add_hash_to_file_name(image_data)
         if user.avatar:
-            user.avatar.delete_sized_images()
             user.avatar.delete()
+            thumbnail_models.Thumbnail.objects.filter(user_id=user.id).delete()
         user.avatar = image_data
         user.save()
-        create_user_avatar_thumbnails.delay(user_id=user.pk)
 
         return UserAvatarUpdate(user=user)
 
@@ -588,6 +668,6 @@ class UserAvatarDelete(BaseMutation):
     @classmethod
     def perform_mutation(cls, _root, info):
         user = info.context.user
-        user.avatar.delete_sized_images()
         user.avatar.delete()
+        thumbnail_models.Thumbnail.objects.filter(user_id=user.id).delete()
         return UserAvatarDelete(user=user)

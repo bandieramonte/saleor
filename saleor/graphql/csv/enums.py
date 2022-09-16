@@ -27,8 +27,8 @@ class ExportScope(graphene.Enum):
 
 class ProductFieldEnum(graphene.Enum):
     NAME = "name"
+    SHORT_DESCRIPTION = "short description"
     DESCRIPTION = "description"
-    LONG_DESCRIPTION = "longDescription"
     PRODUCT_TYPE = "product type"
     CATEGORY = "category"
     PRODUCT_WEIGHT = "product weight"

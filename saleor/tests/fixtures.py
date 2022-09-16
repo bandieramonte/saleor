@@ -29,7 +29,7 @@ from prices import Money, TaxedMoney, fixed_discount
 
 from ..account.models import Address, StaffNotificationRecipient, User
 from ..app.models import App, AppExtension, AppInstallation
-from ..app.types import AppExtensionMount, AppExtensionTarget, AppType
+from ..app.types import AppExtensionMount, AppType
 from ..attribute import AttributeEntityType, AttributeInputType, AttributeType
 from ..attribute.models import (
     Attribute,
@@ -41,15 +41,18 @@ from ..attribute.utils import associate_attribute_values_to_instance
 from ..checkout.fetch import fetch_checkout_info, fetch_checkout_lines
 from ..checkout.models import Checkout, CheckoutLine
 from ..checkout.utils import add_variant_to_checkout, add_voucher_to_checkout
-from ..core import EventDeliveryStatus, JobStatus, TimePeriodType
+from ..core import EventDeliveryStatus, JobStatus
 from ..core.models import EventDelivery, EventDeliveryAttempt, EventPayload
 from ..core.payments import PaymentInterface
+from ..core.postgres import FlatConcatSearchVector
+from ..core.taxes import zero_money
 from ..core.units import MeasurementUnits
 from ..core.utils.editorjs import clean_editor_js
 from ..csv.events import ExportEvents
 from ..csv.models import ExportEvent, ExportFile
 from ..discount import DiscountInfo, DiscountValueType, VoucherType
 from ..discount.models import (
+    NotApplicable,
     Sale,
     SaleChannelListing,
     SaleTranslation,
@@ -76,16 +79,20 @@ from ..order.models import (
     OrderEvent,
     OrderLine,
 )
-from ..order.search import prepare_order_search_document_value
-from ..order.utils import recalculate_order
+from ..order.search import prepare_order_search_vector_value
+from ..order.utils import (
+    get_voucher_discount_assigned_to_order,
+    get_voucher_discount_for_order,
+)
 from ..page.models import Page, PageTranslation, PageType
 from ..payment import ChargeStatus, TransactionKind
-from ..payment.interface import AddressData, GatewayConfig, PaymentData
-from ..payment.models import Payment
+from ..payment.interface import AddressData, GatewayConfig, GatewayResponse, PaymentData
+from ..payment.models import Payment, TransactionItem
 from ..plugins.manager import get_plugins_manager
 from ..plugins.models import PluginConfiguration
 from ..plugins.vatlayer.plugin import VatlayerPlugin
 from ..plugins.webhook.tasks import WebhookResponse
+from ..plugins.webhook.tests.subscription_webhooks import subscription_queries
 from ..plugins.webhook.utils import to_payment_app_id
 from ..product import ProductMediaTypes, ProductTypeKind
 from ..product.models import (
@@ -287,9 +294,12 @@ def site_settings_with_reservations(site_settings):
 
 
 @pytest.fixture
-def checkout(db, channel_USD):
+def checkout(db, channel_USD, settings):
     checkout = Checkout.objects.create(
-        currency=channel_USD.currency_code, channel=channel_USD, email="user@email.com"
+        currency=channel_USD.currency_code,
+        channel=channel_USD,
+        price_expiration=timezone.now() + settings.CHECKOUT_PRICES_TTL,
+        email="user@email.com",
     )
     checkout.set_country("US", commit=True)
     return checkout
@@ -309,6 +319,16 @@ def checkout_with_item(checkout, product):
     variant = product.variants.first()
     checkout_info = fetch_checkout_info(checkout, [], [], get_plugins_manager())
     add_variant_to_checkout(checkout_info, variant, 3)
+    checkout.save()
+    return checkout
+
+
+@pytest.fixture
+def checkout_with_same_items_in_multiple_lines(checkout, product):
+    variant = product.variants.first()
+    checkout_info = fetch_checkout_info(checkout, [], [], get_plugins_manager())
+    add_variant_to_checkout(checkout_info, variant, 1)
+    add_variant_to_checkout(checkout_info, variant, 1, force_new_line=True)
     checkout.save()
     return checkout
 
@@ -412,11 +432,13 @@ def checkout_ready_to_complete(checkout_with_item, address, shipping_method, gif
 
 
 @pytest.fixture
-def checkout_with_digital_item(checkout, digital_content):
+def checkout_with_digital_item(checkout, digital_content, address):
     """Create a checkout with a digital line."""
     variant = digital_content.product_variant
     checkout_info = fetch_checkout_info(checkout, [], [], get_plugins_manager())
     add_variant_to_checkout(checkout_info, variant, 1)
+    checkout.discount_amount = Decimal(0)
+    checkout.billing_address = address
     checkout.email = "customer@example.com"
     checkout.save()
     return checkout
@@ -490,6 +512,80 @@ def checkout_with_variant_without_inventory_tracking(
     return checkout
 
 
+@pytest.fixture()
+def checkout_with_variants(
+    checkout,
+    stock,
+    product_with_default_variant,
+    product_with_single_variant,
+    product_with_two_variants,
+):
+    checkout_info = fetch_checkout_info(checkout, [], [], get_plugins_manager())
+
+    add_variant_to_checkout(
+        checkout_info, product_with_default_variant.variants.get(), 1
+    )
+    add_variant_to_checkout(
+        checkout_info, product_with_single_variant.variants.get(), 10
+    )
+    add_variant_to_checkout(
+        checkout_info, product_with_two_variants.variants.first(), 3
+    )
+    add_variant_to_checkout(checkout_info, product_with_two_variants.variants.last(), 5)
+
+    checkout.save()
+    return checkout
+
+
+@pytest.fixture()
+def checkout_with_shipping_address(checkout_with_variants, address):
+    checkout = checkout_with_variants
+
+    checkout.shipping_address = address.get_copy()
+    checkout.save()
+
+    return checkout
+
+
+@pytest.fixture
+def checkout_with_variants_for_cc(
+    checkout, stocks_for_cc, product_variant_list, product_with_two_variants
+):
+    CheckoutLine.objects.bulk_create(
+        [
+            CheckoutLine(
+                checkout=checkout,
+                variant=product_variant_list[0],
+                quantity=3,
+                currency="USD",
+            ),
+            CheckoutLine(
+                checkout=checkout,
+                variant=product_variant_list[1],
+                quantity=10,
+                currency="USD",
+            ),
+            CheckoutLine(
+                checkout=checkout,
+                variant=product_with_two_variants.variants.last(),
+                quantity=5,
+                currency="USD",
+            ),
+        ]
+    )
+    return checkout
+
+
+@pytest.fixture()
+def checkout_with_shipping_address_for_cc(checkout_with_variants_for_cc, address):
+    checkout = checkout_with_variants_for_cc
+
+    checkout.shipping_address = address.get_copy()
+    checkout.save()
+
+    return checkout
+
+
 @pytest.fixture
 def checkout_with_items(checkout, product_list, product):
     variant = product.variants.get()
@@ -498,6 +594,7 @@ def checkout_with_items(checkout, product_list, product):
     for prod in product_list:
         variant = prod.variants.get()
         add_variant_to_checkout(checkout_info, variant, 1)
+    checkout.save()
     checkout.refresh_from_db()
     return checkout
 
@@ -810,6 +907,7 @@ def order(customer_user, channel_USD):
         user_email=customer_user.email,
         user=customer_user,
         origin=OrderOrigin.CHECKOUT,
+        should_refresh_prices=False,
         metadata={"key": "value"},
         private_metadata={"secret_key": "secret_value"},
     )
@@ -817,9 +915,11 @@ def order(customer_user, channel_USD):
 
 
 @pytest.fixture
-def order_with_search_document_value(order):
-    order.search_document = prepare_order_search_document_value(order)
-    order.save(update_fields=["search_document"])
+def order_with_search_vector_value(order):
+    order.search_vector = FlatConcatSearchVector(
+        *prepare_order_search_vector_value(order)
+    )
+    order.save(update_fields=["search_vector"])
     return order
 
 
@@ -1355,6 +1455,48 @@ def rich_text_attribute_with_many_values(rich_text_attribute):
 
 
 @pytest.fixture
+def plain_text_attribute(db):
+    attribute = Attribute.objects.create(
+        slug="plain-text",
+        name="Plain text",
+        type=AttributeType.PRODUCT_TYPE,
+        input_type=AttributeInputType.PLAIN_TEXT,
+        filterable_in_storefront=False,
+        filterable_in_dashboard=False,
+        available_in_grid=False,
+    )
+    text = "Plain text attribute content."
+    AttributeValue.objects.create(
+        attribute=attribute,
+        name=truncatechars(text, 50),
+        slug=f"instance_{attribute.id}",
+        plain_text=text,
+    )
+    return attribute
+
+
+@pytest.fixture
+def plain_text_attribute_page_type(db):
+    attribute = Attribute.objects.create(
+        slug="plain-text",
+        name="Plain text",
+        type=AttributeType.PAGE_TYPE,
+        input_type=AttributeInputType.PLAIN_TEXT,
+        filterable_in_storefront=False,
+        filterable_in_dashboard=False,
+        available_in_grid=False,
+    )
+    text = "Plain text attribute content."
+    AttributeValue.objects.create(
+        attribute=attribute,
+        name=truncatechars(text, 50),
+        slug=f"instance_{attribute.id}",
+        plain_text=text,
+    )
+    return attribute
+
+
+@pytest.fixture
 def color_attribute_without_values(db):  # pylint: disable=W0613
     return Attribute.objects.create(
         slug="color",
@@ -1787,6 +1929,11 @@ def permission_manage_apps():
 
 
 @pytest.fixture
+def permission_handle_taxes():
+    return Permission.objects.get(codename="handle_taxes")
+
+
+@pytest.fixture
 def permission_manage_observability():
     return Permission.objects.get(codename="manage_observability")
 
@@ -1832,9 +1979,7 @@ def shippable_gift_card_product_type(db):
 
 
 @pytest.fixture
-def product_type_with_rich_text_attribute(
-    rich_text_attribute, color_attribute, size_attribute
-):
+def product_type_with_rich_text_attribute(rich_text_attribute):
     product_type = ProductType.objects.create(
         name="Default Type",
         slug="default-type",
@@ -2171,7 +2316,9 @@ def product_with_two_variants(product_type, category, warehouse, channel_USD):
             for variant in variants
         ]
     )
-    product.search_vector = prepare_product_search_vector_value(product)
+    product.search_vector = FlatConcatSearchVector(
+        *prepare_product_search_vector_value(product)
+    )
     product.save(update_fields=["search_vector"])
 
     return product
@@ -2387,7 +2534,9 @@ def product_with_default_variant(
     )
     Stock.objects.create(warehouse=warehouse, product_variant=variant, quantity=100)
 
-    product.search_vector = prepare_product_search_vector_value(product)
+    product.search_vector = FlatConcatSearchVector(
+        *prepare_product_search_vector_value(product)
+    )
     product.save(update_fields=["search_vector"])
 
     return product
@@ -2689,25 +2838,25 @@ def product_list(product_type, category, warehouse, channel_USD, channel_PLN):
             [
                 Product(
                     name="Test product 1",
+                    shortDescription="a short description",
                     slug="test-product-a",
                     description_plaintext="big blue product",
-                    longDescription_plaintext="big blue product which induces weight loss",
                     category=category,
                     product_type=product_type,
                 ),
                 Product(
                     name="Test product 2",
+                    shortDescription="a short description",
                     slug="test-product-b",
                     description_plaintext="big orange product",
-                    longDescription_plaintext="big orange product which generates intelligence",
                     category=category,
                     product_type=product_type,
                 ),
                 Product(
                     name="Test product 3",
+                    shortDescription="a short description"
                     slug="test-product-c",
                     description_plaintext="small red",
-                    longDescription_plaintext="Useful for tantric practice",
                     category=category,
                     product_type=product_type,
                 ),
@@ -2804,7 +2953,9 @@ def product_list(product_type, category, warehouse, channel_USD, channel_PLN):
 
     for product in products:
         associate_attribute_values_to_instance(product, product_attr, attr_value)
-        product.search_vector = prepare_product_search_vector_value(product)
+        product.search_vector = FlatConcatSearchVector(
+            *prepare_product_search_vector_value(product)
+        )
 
     Product.objects.bulk_update(products, ["search_vector"])
 
@@ -3572,6 +3723,33 @@ def gift_card_event(gift_card, order, app, staff_user):
     )
 
 
+def recalculate_order(order):
+    lines = OrderLine.objects.filter(order_id=order.pk)
+    prices = [line.total_price for line in lines]
+    total = sum(prices, order.shipping_price)
+    undiscounted_total = TaxedMoney(total.net, total.gross)
+
+    try:
+        discount = get_voucher_discount_for_order(order)
+    except NotApplicable:
+        discount = zero_money(order.currency)
+
+    discount = min(discount, total.gross)
+    total -= discount
+
+    order.total = total
+    order.undiscounted_total = undiscounted_total
+
+    if discount:
+        assigned_order_discount = get_voucher_discount_assigned_to_order(order)
+        if assigned_order_discount:
+            assigned_order_discount.amount_value = discount.amount
+            assigned_order_discount.value = discount.amount
+            assigned_order_discount.save(update_fields=["value", "amount_value"])
+
+    order.save()
+
+
 @pytest.fixture
 def order_with_lines(
     order, product_type, category, shipping_zone, warehouse, channel_USD
@@ -3652,10 +3830,10 @@ def order_with_lines(
     )
     stock.refresh_from_db()
 
-    net = variant.get_price(product, [], channel_USD, channel_listing)
-    currency = net.currency
-    gross = Money(amount=net.amount * Decimal(1.23), currency=currency)
-    unit_price = TaxedMoney(net=net, gross=gross)
+    base_price = variant.get_price(product, [], channel_USD, channel_listing)
+    currency = base_price.currency
+    gross = Money(amount=base_price.amount * Decimal(1.23), currency=currency)
+    unit_price = TaxedMoney(net=base_price, gross=gross)
     quantity = 2
     line = order.lines.create(
         product_name=str(variant.product),
@@ -3670,8 +3848,8 @@ def order_with_lines(
         total_price=unit_price * quantity,
         undiscounted_unit_price=unit_price,
         undiscounted_total_price=unit_price * quantity,
-        base_unit_price=unit_price.gross,
-        undiscounted_base_unit_price=unit_price.gross,
+        base_unit_price=base_price,
+        undiscounted_base_unit_price=base_price,
         tax_rate=Decimal("0.23"),
     )
     Allocation.objects.create(
@@ -3701,6 +3879,7 @@ def order_with_lines_for_cc(
     warehouse_for_cc,
     channel_USD,
     customer_user,
+    product_variant_list,
 ):
     address = customer_user.default_billing_address.get_copy()
 
@@ -3717,6 +3896,36 @@ def order_with_lines_for_cc(
     order.collection_point = warehouse_for_cc
     order.collection_point_name = warehouse_for_cc.name
     order.save()
+
+    variant = product_variant_list[0]
+    channel_listing = variant.channel_listings.get(channel=channel_USD)
+    quantity = 1
+    net = variant.get_price(product, [], channel_USD, channel_listing)
+    currency = net.currency
+    gross = Money(amount=net.amount * Decimal(1.23), currency=currency)
+    unit_price = TaxedMoney(net=net, gross=gross)
+    line = order.lines.create(
+        product_name=str(variant.product),
+        variant_name=str(variant),
+        product_sku=variant.sku,
+        product_variant_id=variant.get_global_id(),
+        is_shipping_required=variant.is_shipping_required(),
+        is_gift_card=variant.is_gift_card(),
+        quantity=quantity,
+        variant=variant,
+        unit_price=unit_price,
+        total_price=unit_price * quantity,
+        undiscounted_unit_price=unit_price,
+        undiscounted_total_price=unit_price * quantity,
+        base_unit_price=unit_price.gross,
+        undiscounted_base_unit_price=unit_price.gross,
+        tax_rate=Decimal("0.23"),
+    )
+    Allocation.objects.create(
+        order_line=line,
+        stock=warehouse_for_cc.stock_set.filter(product_variant=variant).first(),
+        quantity_allocated=line.quantity,
+    )
 
     recalculate_order(order)
 
@@ -3792,7 +4001,8 @@ def order_with_lines_and_events(order_with_lines, staff_user):
         order=order_with_lines,
         user=staff_user,
         app=None,
-        order_lines=[(1, order_with_lines.lines.first())],
+        order_lines=[order_with_lines.lines.first()],
+        quantity_diff=1,
     )
     return order_with_lines
 
@@ -4173,7 +4383,6 @@ def draft_order(order_with_lines, shipping_method):
 def draft_order_with_fixed_discount_order(draft_order):
     value = Decimal("20")
     discount = partial(fixed_discount, discount=Money(value, draft_order.currency))
-    draft_order.undiscounted_total = draft_order.total
     draft_order.total = discount(draft_order.total)
     draft_order.discounts.create(
         value_type=DiscountValueType.FIXED,
@@ -4849,8 +5058,8 @@ def product_translation_fr(product):
         language_code="fr",
         product=product,
         name="French name",
+        shortDescription="a short description"
         description=dummy_editorjs("French description."),
-        longDescription=dummy_editorjs("French long description."),
     )
 
 
@@ -4991,6 +5200,19 @@ def payment_dummy_credit_card(db, order_with_lines):
 
 
 @pytest.fixture
+def transaction_item(order):
+    return TransactionItem.objects.create(
+        status="Captured",
+        type="Credit card",
+        reference="PSP ref",
+        available_actions=["refund"],
+        currency="USD",
+        order_id=order.pk,
+        charged_value=Decimal("10"),
+    )
+
+
+@pytest.fixture
 def digital_content(category, media_root, warehouse, channel_USD) -> DigitalContent:
     product_type = ProductType.objects.create(
         name="Digital Type",
@@ -5096,149 +5318,12 @@ def description_json():
                         "front end with a GraphQL API and storefront and dashboard "
                         "written in React to make Saleor a full-functionality "
                         "open source e-commerce."
-                    ),
-                },
-                "type": "paragraph",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {"text": ""},
-                "type": "paragraph",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {
-                    "text": "Get Saleor today!",
-                },
-                "type": "paragraph",
-                "depth": 0,
-                "entityRanges": [{"key": 0, "length": 17, "offset": 0}],
-                "inlineStyleRanges": [],
-            },
-        ],
-        "entityMap": {
-            "0": {
-                "data": {"href": "https://github.com/mirumee/saleor"},
-                "type": "LINK",
-                "mutability": "MUTABLE",
-            }
-        },
-    }
-
-
-@pytest.fixture
-def other_description_json():
-    return {
-        "blocks": [
-            {
-                "key": "",
-                "data": {
-                    "text": "A GRAPHQL-FIRST <b>ECOMMERCE</b> PLATFORM FOR PERFECTIONISTS",
-                },
-                "text": "A GRAPHQL-FIRST ECOMMERCE PLATFORM FOR PERFECTIONISTS",
-                "type": "header-two",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {
-                    "text": (
-                        "Saleor is powered by a GraphQL server running on "
-                        "top of Python 3 and a Django 2 framework."
-                    ),
-                },
-                "type": "paragraph",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-        ],
-        "entityMap": {},
-    }
-
-
-@pytest.fixture
-def longDescription_json():
-    return {
-        "blocks": [
-            {
-                "key": "",
-                "data": {
-                    "text": "E-commerce for the PWA era which promises top-notch E-commerce applications promoting high quality user experience",
-                },
-                "text": "E-commerce for the PWA era which promises top-notch E-commerce applications promoting high quality user experience",
-                "type": "header-two",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {
-                    "text": (
-                        "A modular, high performance e-commerce storefront "
-                        "built with GraphQL, Django, and ReactJS."
-                        "It encompasses three projects, namely, the Saleor API, "
-                        "a dashboard, and a storefront."
-                    )
-                },
-                "text": (
-                    "A modular, high performance e-commerce storefront "
-                    "built with GraphQL, Django, and ReactJS."
-                    "It encompasses three projects, namely, the Saleor API, "
-                    "a dashboard, and a storefront."
-                ),
-                "type": "unstyled",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {},
-                "text": "",
-                "type": "unstyled",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {
-                    "text": (
-                        "Saleor is a rapidly-growing open source e-commerce platform "
-                        "that has served high-volume companies from branches "
-                        "like publishing and apparel since 2012. Based on Python "
-                        "and Django, the latest major update introduces a modular "
-                        "front end with a GraphQL API and storefront and dashboard "
-                        "written in React to make Saleor a full-functionality "
-                        "open source e-commerce."
                         "Saleor is supported by dozens of experienced programmers, who "
                         "believe in the power of Saleor to provide the greatest E-commerce "
                         "experience to users."
                     ),
                 },
-                "text": (
-                    "Saleor is a rapidly-growing open source e-commerce platform "
-                    "that has served high-volume companies from branches "
-                    "like publishing and apparel since 2012. Based on Python "
-                    "and Django, the latest major update introduces a modular "
-                    "front end with a GraphQL API and storefront and dashboard "
-                    "written in React to make Saleor a full-functionality "
-                    "open source e-commerce."
-                    "Saleor is supported by dozens of experienced programmers, who "
-                    "believe in the power of Saleor to provide the greatest E-commerce "
-                    "experience to users."
-                ),
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5246,8 +5331,7 @@ def longDescription_json():
             {
                 "key": "",
                 "data": {"text": ""},
-                "text": "",
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [],
                 "inlineStyleRanges": [],
@@ -5257,8 +5341,7 @@ def longDescription_json():
                 "data": {
                     "text": "Get Saleor today! Don't miss this chance!",
                 },
-                "text": "Get Saleor today! Don't miss this chance!",
-                "type": "unstyled",
+                "type": "paragraph",
                 "depth": 0,
                 "entityRanges": [{"key": 0, "length": 17, "offset": 0}],
                 "inlineStyleRanges": [],
@@ -5273,51 +5356,12 @@ def longDescription_json():
         },
     }
 
-
-@pytest.fixture
-def other_longDescription_json():
-    return {
-        "blocks": [
-            {
-                "key": "",
-                "data": {
-                    "text": "A GRAPHQL-FIRST <b>ECOMMERCE</b> PLATFORM FOR PERFECTIONISTS SEEKING THE BEST EXPERIENCE FOR THE USERS",
-                },
-                "text": "A GRAPHQL-FIRST ECOMMERCE PLATFORM FOR PERFECTIONISTS SEEKING THE BEST EXPERIENCE FOR THE USERS",
-                "type": "header-two",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-            {
-                "key": "",
-                "data": {
-                    "text": (
-                        "Saleor is powered by a GraphQL server running on "
-                        "top of Python 3 and a Django 2 framework."
-                        "Saleor is built over 3 modules to aid its modularity: "
-                        "the Saleor API, the Saleor dashboard, and the Saleor Storefront."
-                    ),
-                },
-                "text": (
-                    "Saleor is powered by a GraphQL server running on "
-                    "top of Python 3 and a Django 2 framework."
-                    "Saleor is built over 3 modules to aid its modularity: "
-                    "the Saleor API, the Saleor dashboard, and the Saleor Storefront."
-                ),
-                "type": "unstyled",
-                "depth": 0,
-                "entityRanges": [],
-                "inlineStyleRanges": [],
-            },
-        ],
-        "entityMap": {},
-    }
-
-
 @pytest.fixture
 def app(db):
-    app = App.objects.create(name="Sample app objects", is_active=True)
+    app = App.objects.create(
+        name="Sample app objects",
+        is_active=True,
+    )
     return app
 
 
@@ -5329,6 +5373,8 @@ def webhook_app(
     permission_manage_discounts,
     permission_manage_menus,
     permission_manage_products,
+    permission_manage_staff,
+    permission_manage_orders,
 ):
     app = App.objects.create(name="Webhook app", is_active=True)
     app.permissions.add(permission_manage_shipping)
@@ -5336,6 +5382,8 @@ def webhook_app(
     app.permissions.add(permission_manage_discounts)
     app.permissions.add(permission_manage_menus)
     app.permissions.add(permission_manage_products)
+    app.permissions.add(permission_manage_staff)
+    app.permissions.add(permission_manage_orders)
     return app
 
 
@@ -5390,6 +5438,27 @@ def payment_app(db, permission_manage_payments):
 
 
 @pytest.fixture
+def payment_app_with_subscription_webhooks(db, permission_manage_payments):
+    app = App.objects.create(name="Payment App", is_active=True)
+    app.tokens.create(name="Default")
+    app.permissions.add(permission_manage_payments)
+
+    webhook = Webhook.objects.create(
+        name="payment-subscription-webhook-1",
+        app=app,
+        target_url="https://payment-gateway.com/api/",
+        subscription_query=subscription_queries.PAYMENT_AUTHORIZE,
+    )
+    webhook.events.bulk_create(
+        [
+            WebhookEvent(event_type=event_type, webhook=webhook)
+            for event_type in WebhookEventSyncType.PAYMENT_EVENTS
+        ]
+    )
+    return app
+
+
+@pytest.fixture
 def shipping_app(db, permission_manage_shipping):
     app = App.objects.create(name="Shipping App", is_active=True)
     app.tokens.create(name="Default")
@@ -5406,6 +5475,28 @@ def shipping_app(db, permission_manage_shipping):
             for event_type in [
                 WebhookEventSyncType.SHIPPING_LIST_METHODS_FOR_CHECKOUT,
                 WebhookEventAsyncType.FULFILLMENT_CREATED,
+            ]
+        ]
+    )
+    return app
+
+
+@pytest.fixture
+def tax_app(db, permission_handle_taxes):
+    app = App.objects.create(name="Tax App", is_active=True)
+    app.permissions.add(permission_handle_taxes)
+
+    webhook = Webhook.objects.create(
+        name="tax-webhook-1",
+        app=app,
+        target_url="https://tax-app.com/api/",
+    )
+    webhook.events.bulk_create(
+        [
+            WebhookEvent(event_type=event_type, webhook=webhook)
+            for event_type in [
+                WebhookEventSyncType.ORDER_CALCULATE_TAXES,
+                WebhookEventSyncType.CHECKOUT_CALCULATE_TAXES,
             ]
         ]
     )
@@ -5485,7 +5576,7 @@ def staff_notification_recipient(db, staff_user):
 
 
 @pytest.fixture
-def warehouse(address, shipping_zone):
+def warehouse(address, shipping_zone, channel_USD):
     warehouse = Warehouse.objects.create(
         address=address,
         name="Example Warehouse",
@@ -5493,12 +5584,13 @@ def warehouse(address, shipping_zone):
         email="test@example.com",
     )
     warehouse.shipping_zones.add(shipping_zone)
+    warehouse.channels.add(channel_USD)
     warehouse.save()
     return warehouse
 
 
 @pytest.fixture
-def warehouse_JPY(address, shipping_zone_JPY):
+def warehouse_JPY(address, shipping_zone_JPY, channel_JPY):
     warehouse = Warehouse.objects.create(
         address=address,
         name="Example Warehouse JPY",
@@ -5506,13 +5598,14 @@ def warehouse_JPY(address, shipping_zone_JPY):
         email="test-jpy@example.com",
     )
     warehouse.shipping_zones.add(shipping_zone_JPY)
+    warehouse.channels.add(channel_JPY)
     warehouse.save()
     return warehouse
 
 
 @pytest.fixture
-def warehouses(address, address_usa):
-    return Warehouse.objects.bulk_create(
+def warehouses(address, address_usa, channel_USD):
+    warehouses = Warehouse.objects.bulk_create(
         [
             Warehouse(
                 address=address.get_copy(),
@@ -5528,10 +5621,13 @@ def warehouses(address, address_usa):
             ),
         ]
     )
+    for warehouse in warehouses:
+        warehouse.channels.add(channel_USD)
+    return warehouses
 
 
 @pytest.fixture()
-def warehouses_for_cc(address, shipping_zones):
+def warehouses_for_cc(address, shipping_zones, channel_USD):
     warehouses = Warehouse.objects.bulk_create(
         [
             Warehouse(
@@ -5565,15 +5661,14 @@ def warehouses_for_cc(address, shipping_zones):
             ),
         ]
     )
-    for warehouse in warehouses:
-        warehouse.shipping_zones.add(shipping_zones[0])
-        warehouse.shipping_zones.add(shipping_zones[1])
-        warehouse.save()
+    # add to shipping zones only not click and collect warehouses
+    warehouses[0].shipping_zones.add(*shipping_zones)
+    channel_USD.warehouses.add(*warehouses)
     return warehouses
 
 
 @pytest.fixture
-def warehouse_for_cc(address, product_variant_list, shipping_zones):
+def warehouse_for_cc(address, product_variant_list, channel_USD):
     warehouse = Warehouse.objects.create(
         address=address.get_copy(),
         name="Local Warehouse",
@@ -5582,8 +5677,7 @@ def warehouse_for_cc(address, product_variant_list, shipping_zones):
         is_private=False,
         click_and_collect_option=WarehouseClickAndCollectOption.LOCAL_STOCK,
     )
-    warehouse.shipping_zones.add(shipping_zones[0])
-    warehouse.shipping_zones.add(shipping_zones[1])
+    warehouse.channels.add(channel_USD)
 
     Stock.objects.bulk_create(
         [
@@ -5663,7 +5757,7 @@ def stocks_for_cc(warehouses_for_cc, product_variant_list, product_with_two_vari
 
 
 @pytest.fixture
-def checkout_for_cc(channel_USD, customer_user, product_variant_list):
+def checkout_for_cc(channel_USD, customer_user):
     return Checkout.objects.create(
         channel=channel_USD,
         billing_address=customer_user.default_billing_address,
@@ -5679,13 +5773,22 @@ def checkout_with_items_for_cc(checkout_for_cc, product_variant_list):
     CheckoutLine.objects.bulk_create(
         [
             CheckoutLine(
-                checkout=checkout_for_cc, variant=product_variant_list[0], quantity=1
+                checkout=checkout_for_cc,
+                variant=product_variant_list[0],
+                quantity=1,
+                currency=checkout_for_cc.currency,
             ),
             CheckoutLine(
-                checkout=checkout_for_cc, variant=product_variant_list[1], quantity=1
+                checkout=checkout_for_cc,
+                variant=product_variant_list[1],
+                quantity=1,
+                currency=checkout_for_cc.currency,
             ),
             CheckoutLine(
-                checkout=checkout_for_cc, variant=product_variant_list[2], quantity=1
+                checkout=checkout_for_cc,
+                variant=product_variant_list[2],
+                quantity=1,
+                currency=checkout_for_cc.currency,
             ),
         ]
     )
@@ -5697,7 +5800,10 @@ def checkout_with_items_for_cc(checkout_for_cc, product_variant_list):
 @pytest.fixture
 def checkout_with_item_for_cc(checkout_for_cc, product_variant_list):
     CheckoutLine.objects.create(
-        checkout=checkout_for_cc, variant=product_variant_list[0], quantity=1
+        checkout=checkout_for_cc,
+        variant=product_variant_list[0],
+        quantity=1,
+        currency=checkout_for_cc.currency,
     )
     return checkout_for_cc
 
@@ -5717,13 +5823,14 @@ def warehouses_with_different_shipping_zone(warehouses, shipping_zones):
 
 
 @pytest.fixture
-def warehouse_no_shipping_zone(address):
+def warehouse_no_shipping_zone(address, channel_USD):
     warehouse = Warehouse.objects.create(
         address=address,
         name="Warehouse without shipping zone",
         slug="warehouse-no-shipping-zone",
         email="test2@example.com",
     )
+    warehouse.channels.add(channel_USD)
     return warehouse
 
 
@@ -5797,8 +5904,10 @@ def allocations(order_list, stock, channel_USD):
     )
 
     for order in order_list:
-        order.search_document = prepare_order_search_document_value(order)
-    Order.objects.bulk_update(order_list, ["search_document"])
+        order.search_vector = FlatConcatSearchVector(
+            *prepare_order_search_vector_value(order)
+        )
+    Order.objects.bulk_update(order_list, ["search_vector"])
 
     return Allocation.objects.bulk_create(
         [
@@ -5935,6 +6044,46 @@ def app_manifest():
         "appUrl": "",
         "configurationUrl": "http://127.0.0.1:5000/configuration/",
         "tokenTargetUrl": "http://127.0.0.1:5000/configuration/install",
+    }
+
+
+@pytest.fixture
+def app_manifest_webhook():
+    return {
+        "name": "webhook",
+        "asyncEvents": [
+            "ORDER_CREATED",
+            "ORDER_FULLY_PAID",
+            "CUSTOMER_CREATED",
+            "FULFILLMENT_CREATED",
+        ],
+        "query": """
+            subscription {
+                event {
+                    ... on OrderCreated {
+                        order {
+                            id
+                        }
+                    }
+                    ... on OrderFullyPaid {
+                        order {
+                            id
+                        }
+                    }
+                    ... on CustomerCreated {
+                        user {
+                            id
+                        }
+                    }
+                    ... on FulfillmentCreated {
+                        fulfillment {
+                            id
+                        }
+                    }
+                }
+            }
+        """,
+        "targetUrl": "https://app.example/api/webhook",
     }
 
 
@@ -6080,3 +6229,28 @@ def event_deliveries(event_payload, webhook, app):
         "delivery_2_id": delivery_2,
         "delivery_3_id": delivery_3,
     }
+
+
+@pytest.fixture
+def action_required_gateway_response():
+    return GatewayResponse(
+        is_success=True,
+        action_required=True,
+        action_required_data={
+            "paymentData": "test",
+            "paymentMethodType": "scheme",
+            "url": "https://test.adyen.com/hpp/3d/validate.shtml",
+            "data": {
+                "MD": "md-test-data",
+                "PaReq": "PaReq-test-data",
+                "TermUrl": "http://127.0.0.1:3000/",
+            },
+            "method": "POST",
+            "type": "redirect",
+        },
+        kind=TransactionKind.CAPTURE,
+        amount=Decimal(3.0),
+        currency="usd",
+        transaction_id="1234",
+        error=None,
+    )

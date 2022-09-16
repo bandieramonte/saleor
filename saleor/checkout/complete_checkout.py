@@ -18,23 +18,23 @@ from django.db import transaction
 from prices import Money, TaxedMoney
 
 from ..account.error_codes import AccountErrorCode
-from ..account.models import Address, User
+from ..account.models import User
 from ..account.utils import store_user_address
 from ..checkout import calculations
 from ..checkout.error_codes import CheckoutErrorCode
 from ..core.exceptions import GiftCardNotApplicable, InsufficientStock
+from ..core.postgres import FlatConcatSearchVector
 from ..core.taxes import TaxError, zero_taxed_money
 from ..core.tracing import traced_atomic_transaction
 from ..core.utils.url import validate_storefront_url
 from ..discount import DiscountInfo, DiscountValueType, OrderDiscountType, VoucherType
-from ..discount.models import NotApplicable, Voucher
+from ..discount.models import NotApplicable
 from ..discount.utils import (
     add_voucher_usage_by_customer,
     get_sale_id_applied_as_a_discount,
     increase_voucher_usage,
     release_voucher_usage,
 )
-from ..giftcard.utils import fulfill_non_shippable_gift_cards
 from ..graphql.checkout.utils import (
     prepare_insufficient_stock_checkout_validation_error,
 )
@@ -43,7 +43,7 @@ from ..order.actions import mark_order_as_paid, order_created
 from ..order.fetch import OrderInfo, OrderLineInfo
 from ..order.models import Order, OrderLine
 from ..order.notifications import send_order_confirmation
-from ..order.search import prepare_order_search_document_value
+from ..order.search import prepare_order_search_vector_value
 from ..order.utils import update_order_authorize_data, update_order_charge_data
 from ..payment import PaymentError, TransactionKind, gateway
 from ..payment.models import Payment, Transaction
@@ -53,20 +53,27 @@ from ..warehouse.availability import check_stock_and_preorder_quantity_bulk
 from ..warehouse.management import allocate_preorders, allocate_stocks
 from ..warehouse.reservations import is_reservation_enabled
 from . import AddressType
-from .base_calculations import calculate_base_line_unit_price
+from .base_calculations import (
+    calculate_base_line_unit_price,
+    calculate_undiscounted_base_line_total_price,
+    calculate_undiscounted_base_line_unit_price,
+)
+from .calculations import fetch_checkout_prices_if_expired
 from .checkout_cleaner import (
     _validate_gift_cards,
     clean_checkout_payment,
     clean_checkout_shipping,
 )
 from .fetch import CheckoutInfo, CheckoutLineInfo
-from .models import Checkout
 from .utils import get_voucher_for_checkout_info
 
 if TYPE_CHECKING:
+    from ..account.models import Address
     from ..app.models import App
+    from ..discount.models import Voucher
     from ..plugins.manager import PluginsManager
     from ..site.models import SiteSettings
+    from .models import Checkout
 
 
 def _process_voucher_data_for_order(checkout_info: "CheckoutInfo") -> dict:
@@ -162,9 +169,6 @@ def _create_line_for_order(
     quantity = checkout_line.quantity
     variant = checkout_line_info.variant
     product = checkout_line_info.product
-    address = (
-        checkout_info.shipping_address or checkout_info.billing_address
-    )  # FIXME: check which address we need here
 
     product_name = str(product)
     variant_name = str(variant)
@@ -178,30 +182,43 @@ def _create_line_for_order(
     if translated_variant_name == variant_name:
         translated_variant_name = ""
 
-    base_prices_data = calculate_base_line_unit_price(
+    base_unit_price = calculate_base_line_unit_price(
         line_info=checkout_line_info, channel=checkout_info.channel, discounts=discounts
     )
-    total_line_price_data = manager.calculate_checkout_line_total(
-        checkout_info,
-        lines,
-        checkout_line_info,
-        address,
-        discounts,
+    undiscounted_base_unit_price = calculate_undiscounted_base_line_unit_price(
+        line_info=checkout_line_info,
+        channel=checkout_info.channel,
     )
-    unit_price_data = manager.calculate_checkout_line_unit_price(
-        checkout_info,
-        lines,
-        checkout_line_info,
-        address,
-        discounts,
+    undiscounted_base_total_price = calculate_undiscounted_base_line_total_price(
+        line_info=checkout_line_info,
+        channel=checkout_info.channel,
     )
-    tax_rate = manager.get_checkout_line_tax_rate(
-        checkout_info,
-        lines,
-        checkout_line_info,
-        address,
-        discounts,
-        unit_price_data.price_with_sale,
+    undiscounted_unit_price = TaxedMoney(
+        net=undiscounted_base_unit_price, gross=undiscounted_base_unit_price
+    )
+    undiscounted_total_price = TaxedMoney(
+        net=undiscounted_base_total_price, gross=undiscounted_base_total_price
+    )
+    total_line_price = calculations.checkout_line_total(
+        manager=manager,
+        checkout_info=checkout_info,
+        lines=lines,
+        checkout_line_info=checkout_line_info,
+        discounts=discounts,
+    )
+    unit_price = calculations.checkout_line_unit_price(
+        manager=manager,
+        checkout_info=checkout_info,
+        lines=lines,
+        checkout_line_info=checkout_line_info,
+        discounts=discounts,
+    )
+    tax_rate = calculations.checkout_line_tax_rate(
+        manager=manager,
+        checkout_info=checkout_info,
+        lines=lines,
+        checkout_line_info=checkout_line_info,
+        discounts=discounts,
     )
 
     price_override = checkout_line_info.line.price_override
@@ -224,13 +241,11 @@ def _create_line_for_order(
     if checkout_line_info.voucher:
         voucher_code = checkout_line_info.voucher.code
 
-    discount_price_data = (
-        unit_price_data.undiscounted_price - unit_price_data.price_with_discounts
-    )
+    discount_price = undiscounted_unit_price - unit_price
     if taxes_included_in_prices:
-        discount_amount = discount_price_data.gross
+        discount_amount = discount_price.gross
     else:
-        discount_amount = discount_price_data.net
+        discount_amount = discount_price.net
 
     unit_discount_reason = None
     if sale_id:
@@ -252,20 +267,20 @@ def _create_line_for_order(
         is_gift_card=variant.is_gift_card(),
         quantity=quantity,
         variant=variant,
-        unit_price=unit_price_data.price_with_discounts,  # type: ignore
-        undiscounted_unit_price=unit_price_data.undiscounted_price,  # type: ignore
-        undiscounted_total_price=(
-            total_line_price_data.undiscounted_price  # type: ignore
-        ),
-        total_price=total_line_price_data.price_with_discounts,  # type: ignore
+        unit_price=unit_price,  # type: ignore
+        undiscounted_unit_price=undiscounted_unit_price,  # type: ignore
+        undiscounted_total_price=undiscounted_total_price,  # type: ignore
+        total_price=total_line_price,  # type: ignore
         tax_rate=tax_rate,
         sale_id=graphene.Node.to_global_id("Sale", sale_id) if sale_id else None,
         voucher_code=voucher_code,
         unit_discount=discount_amount,  # type: ignore
         unit_discount_reason=unit_discount_reason,
         unit_discount_value=discount_amount.amount,  # we store value as fixed discount
-        base_unit_price=base_prices_data.price_with_discounts,
-        undiscounted_base_unit_price=base_prices_data.undiscounted_price,
+        base_unit_price=base_unit_price,
+        undiscounted_base_unit_price=undiscounted_base_unit_price,
+        metadata=checkout_line.metadata,
+        private_metadata=checkout_line.private_metadata,
     )
     is_digital = line.is_digital
     line_info = OrderLineInfo(
@@ -328,6 +343,7 @@ def _create_lines_for_order(
         quantities,
         checkout_info.channel.slug,
         global_quantity_limit=None,
+        delivery_method_info=checkout_info.delivery_method_info,
         additional_filter_lookup=additional_warehouse_lookup,
         existing_lines=lines,
         replace=True,
@@ -368,25 +384,28 @@ def _prepare_order_data(
         checkout_info.shipping_address or checkout_info.billing_address
     )  # FIXME: check which address we need here
 
-    taxed_total = calculations.checkout_total(
+    taxed_total = calculations.calculate_checkout_total_with_gift_cards(
         manager=manager,
         checkout_info=checkout_info,
         lines=lines,
         address=address,
         discounts=discounts,
     )
-    cards_total = checkout.get_total_gift_cards_balance()
-    taxed_total.gross -= cards_total
-    taxed_total.net -= cards_total
-
-    taxed_total = max(taxed_total, zero_taxed_money(checkout.currency))
     undiscounted_total = taxed_total + checkout.discount
 
-    shipping_total = manager.calculate_checkout_shipping(
-        checkout_info, lines, address, discounts
+    shipping_total = calculations.checkout_shipping_price(
+        manager=manager,
+        checkout_info=checkout_info,
+        lines=lines,
+        address=address,
+        discounts=discounts,
     )
-    shipping_tax_rate = manager.get_checkout_shipping_tax_rate(
-        checkout_info, lines, address, discounts, shipping_total
+    shipping_tax_rate = calculations.checkout_shipping_tax_rate(
+        manager=manager,
+        checkout_info=checkout_info,
+        lines=lines,
+        address=address,
+        discounts=discounts,
     )
     order_data.update(
         _process_shipping_data_for_order(checkout_info, shipping_total, manager, lines)
@@ -417,7 +436,13 @@ def _prepare_order_data(
     order_data.update(_process_voucher_data_for_order(checkout_info))
 
     order_data["total_price_left"] = (
-        manager.calculate_checkout_subtotal(checkout_info, lines, address, discounts)
+        calculations.checkout_subtotal(
+            manager=manager,
+            checkout_info=checkout_info,
+            lines=lines,
+            address=address,
+            discounts=discounts,
+        )
         + shipping_total
         - checkout.discount
     ).gross
@@ -515,8 +540,9 @@ def _create_order(
     allocate_stocks(
         order_lines_info,
         country_code,
-        checkout_info.channel.slug,
+        checkout_info.channel,
         manager,
+        checkout_info.delivery_method_info.warehouse_pk,
         additional_warehouse_lookup,
         check_reservations=is_reservation_enabled(site_settings),
         checkout_lines=[line.line for line in checkout_lines],
@@ -539,7 +565,9 @@ def _create_order(
     order.private_metadata = checkout.private_metadata
     update_order_charge_data(order, with_save=False)
     update_order_authorize_data(order, with_save=False)
-    order.search_document = prepare_order_search_document_value(order)
+    order.search_vector = FlatConcatSearchVector(
+        *prepare_order_search_vector_value(order)
+    )
     order.save()
 
     order_info = OrderInfo(
@@ -552,7 +580,11 @@ def _create_order(
 
     transaction.on_commit(
         lambda: order_created(
-            order_info=order_info, user=user, app=app, manager=manager
+            order_info=order_info,
+            user=user,
+            app=app,
+            manager=manager,
+            site_settings=site_settings,
         )
     )
 
@@ -560,11 +592,6 @@ def _create_order(
     transaction.on_commit(
         lambda: send_order_confirmation(order_info, checkout.redirect_url, manager)
     )
-
-    if site_settings.automatically_fulfill_non_shippable_gift_card:
-        fulfill_non_shippable_gift_cards(
-            order, order_lines, site_settings, user, app, manager
-        )
 
     return order
 
@@ -711,6 +738,9 @@ def complete_checkout(
     for thread race.
     :raises ValidationError
     """
+
+    fetch_checkout_prices_if_expired(checkout_info, manager, lines, discounts)
+
     checkout = checkout_info.checkout
     channel_slug = checkout_info.channel.slug
     payment = checkout.get_last_active_payment()
@@ -885,8 +915,9 @@ def _handle_allocations_of_order_lines(
     allocate_stocks(
         order_lines_info,
         country_code,
-        checkout_info.channel.slug,
+        checkout_info.channel,
         manager,
+        checkout_info.delivery_method_info.warehouse_pk,
         additional_warehouse_lookup,
         check_reservations=reservation_enabled,
         checkout_lines=[line.line for line in checkout_lines],
@@ -944,7 +975,11 @@ def _post_create_order_actions(
 
     transaction.on_commit(
         lambda: order_created(
-            order_info=order_info, user=user, app=app, manager=manager
+            order_info=order_info,
+            user=user,
+            app=app,
+            manager=manager,
+            site_settings=site_settings,
         )
     )
 
@@ -954,12 +989,6 @@ def _post_create_order_actions(
             order_info, checkout_info.checkout.redirect_url, manager
         )
     )
-
-    order_lines = [line.line for line in order_lines_info]
-    if site_settings.automatically_fulfill_non_shippable_gift_card:
-        fulfill_non_shippable_gift_cards(
-            order, order_lines, site_settings, user, app, manager
-        )
 
 
 def _create_order_from_checkout(
@@ -1068,7 +1097,9 @@ def _create_order_from_checkout(
     update_order_authorize_data(order, with_save=False)
 
     # order search
-    order.search_document = prepare_order_search_document_value(order)
+    order.search_vector = FlatConcatSearchVector(
+        *prepare_order_search_vector_value(order)
+    )
     order.save()
 
     # post create actions

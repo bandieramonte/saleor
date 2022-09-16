@@ -13,7 +13,8 @@ from ..discount import OrderDiscountType
 from ..graphql.core.utils import to_global_id_or_none
 from ..product import ProductMediaTypes
 from ..product.models import DigitalContentUrl, Product, ProductMedia, ProductVariant
-from ..product.product_images import AVAILABLE_PRODUCT_SIZES, get_thumbnail
+from ..product.product_images import get_product_image_thumbnail_url
+from ..thumbnail import THUMBNAIL_SIZES
 from .models import FulfillmentLine, Order, OrderLine
 
 if TYPE_CHECKING:
@@ -22,10 +23,9 @@ if TYPE_CHECKING:
 
 
 def get_image_payload(instance: ProductMedia):
-    image_file = instance.image if instance else None
     return {
-        size: get_thumbnail(image_file, size, "thumbnail")
-        for size in AVAILABLE_PRODUCT_SIZES
+        size: get_product_image_thumbnail_url(instance, size)
+        for size in THUMBNAIL_SIZES
     }
 
 
@@ -54,12 +54,12 @@ def get_product_attributes(product):
                 },
                 "values": [
                     {
-                        "name": value.get("name"),
-                        "value": value.get("value"),
-                        "slug": value.get("slug"),
-                        "file_url": value.get("file_url"),
+                        "name": value.name,
+                        "value": value.value,
+                        "slug": value.slug,
+                        "file_url": value.file_url,
                     }
-                    for value in attr.values.values("name", "value", "slug", "file_url")
+                    for value in attr.values.all()
                 ],
             }
         )

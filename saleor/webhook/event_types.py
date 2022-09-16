@@ -8,6 +8,7 @@ from ..core.permissions import (
     MenuPermissions,
     OrderPermissions,
     PagePermissions,
+    PageTypePermissions,
     PaymentPermissions,
     ProductPermissions,
     ShippingPermissions,
@@ -18,10 +19,22 @@ from ..core.permissions import (
 class WebhookEventAsyncType:
     ANY = "any_events"
 
+    ADDRESS_CREATED = "address_created"
+    ADDRESS_UPDATED = "address_updated"
+    ADDRESS_DELETED = "address_deleted"
+
     APP_INSTALLED = "app_installed"
     APP_UPDATED = "app_updated"
     APP_DELETED = "app_deleted"
     APP_STATUS_CHANGED = "app_status_changed"
+
+    ATTRIBUTE_CREATED = "attribute_created"
+    ATTRIBUTE_UPDATED = "attribute_updated"
+    ATTRIBUTE_DELETED = "attribute_deleted"
+
+    ATTRIBUTE_VALUE_CREATED = "attribute_value_created"
+    ATTRIBUTE_VALUE_UPDATED = "attribute_value_updated"
+    ATTRIBUTE_VALUE_DELETED = "attribute_value_deleted"
 
     CATEGORY_CREATED = "category_created"
     CATEGORY_UPDATED = "category_updated"
@@ -59,6 +72,7 @@ class WebhookEventAsyncType:
     SALE_CREATED = "sale_created"
     SALE_UPDATED = "sale_updated"
     SALE_DELETED = "sale_deleted"
+    SALE_TOGGLE = "sale_toggle"
 
     INVOICE_REQUESTED = "invoice_requested"
     INVOICE_DELETED = "invoice_deleted"
@@ -68,6 +82,7 @@ class WebhookEventAsyncType:
 
     CUSTOMER_CREATED = "customer_created"
     CUSTOMER_UPDATED = "customer_updated"
+    CUSTOMER_DELETED = "customer_deleted"
 
     COLLECTION_CREATED = "collection_created"
     COLLECTION_UPDATED = "collection_updated"
@@ -93,6 +108,14 @@ class WebhookEventAsyncType:
     PAGE_UPDATED = "page_updated"
     PAGE_DELETED = "page_deleted"
 
+    PAGE_TYPE_CREATED = "page_type_created"
+    PAGE_TYPE_UPDATED = "page_type_updated"
+    PAGE_TYPE_DELETED = "page_type_deleted"
+
+    PERMISSION_GROUP_CREATED = "permission_group_created"
+    PERMISSION_GROUP_UPDATED = "permission_group_updated"
+    PERMISSION_GROUP_DELETED = "permission_group_deleted"
+
     SHIPPING_PRICE_CREATED = "shipping_price_created"
     SHIPPING_PRICE_UPDATED = "shipping_price_updated"
     SHIPPING_PRICE_DELETED = "shipping_price_deleted"
@@ -100,6 +123,10 @@ class WebhookEventAsyncType:
     SHIPPING_ZONE_CREATED = "shipping_zone_created"
     SHIPPING_ZONE_UPDATED = "shipping_zone_updated"
     SHIPPING_ZONE_DELETED = "shipping_zone_deleted"
+
+    STAFF_CREATED = "staff_created"
+    STAFF_UPDATED = "staff_updated"
+    STAFF_DELETED = "staff_deleted"
 
     TRANSACTION_ACTION_REQUEST = "transaction_action_request"
 
@@ -118,10 +145,19 @@ class WebhookEventAsyncType:
 
     DISPLAY_LABELS = {
         ANY: "Any events",
+        ADDRESS_CREATED: "Address created",
+        ADDRESS_UPDATED: "Address updated",
+        ADDRESS_DELETED: "Address deleted",
         APP_INSTALLED: "App created",
         APP_UPDATED: "App updated",
         APP_DELETED: "App deleted",
         APP_STATUS_CHANGED: "App status changed",
+        ATTRIBUTE_CREATED: "Attribute created",
+        ATTRIBUTE_UPDATED: "Attribute updated",
+        ATTRIBUTE_DELETED: "Attribute deleted",
+        ATTRIBUTE_VALUE_CREATED: "Attribute value created",
+        ATTRIBUTE_VALUE_UPDATED: "Attribute value updated",
+        ATTRIBUTE_VALUE_DELETED: "Attribute value deleted",
         CATEGORY_CREATED: "Category created",
         CATEGORY_UPDATED: "Category updated",
         CATEGORY_DELETED: "Category deleted",
@@ -151,11 +187,13 @@ class WebhookEventAsyncType:
         SALE_CREATED: "Sale created",
         SALE_UPDATED: "Sale updated",
         SALE_DELETED: "Sale deleted",
+        SALE_TOGGLE: "Sale toggle",
         INVOICE_REQUESTED: "Invoice requested",
         INVOICE_DELETED: "Invoice deleted",
         INVOICE_SENT: "Invoice sent",
         CUSTOMER_CREATED: "Customer created",
         CUSTOMER_UPDATED: "Customer updated",
+        CUSTOMER_DELETED: "Customer deleted",
         COLLECTION_CREATED: "Collection created",
         COLLECTION_UPDATED: "Collection updated",
         COLLECTION_DELETED: "Collection deleted",
@@ -169,18 +207,27 @@ class WebhookEventAsyncType:
         PRODUCT_VARIANT_BACK_IN_STOCK: "Product variant back in stock",
         CHECKOUT_CREATED: "Checkout created",
         CHECKOUT_UPDATED: "Checkout updated",
-        FULFILLMENT_CREATED: "Fulfillment_created",
-        FULFILLMENT_CANCELED: "Fulfillment_cancelled",
+        FULFILLMENT_CREATED: "Fulfillment created",
+        FULFILLMENT_CANCELED: "Fulfillment cancelled",
         NOTIFY_USER: "Notify user",
         PAGE_CREATED: "Page Created",
         PAGE_UPDATED: "Page Updated",
         PAGE_DELETED: "Page Deleted",
+        PAGE_TYPE_CREATED: "Page type created",
+        PAGE_TYPE_UPDATED: "Page type updated",
+        PAGE_TYPE_DELETED: "Page type deleted",
+        PERMISSION_GROUP_CREATED: "Permission group created",
+        PERMISSION_GROUP_UPDATED: "Permission group updated",
+        PERMISSION_GROUP_DELETED: "Permission group deleted",
         SHIPPING_PRICE_CREATED: "Shipping price created",
         SHIPPING_PRICE_UPDATED: "Shipping price updated",
         SHIPPING_PRICE_DELETED: "Shipping price deleted",
         SHIPPING_ZONE_CREATED: "Shipping zone created",
         SHIPPING_ZONE_UPDATED: "Shipping zone updated",
         SHIPPING_ZONE_DELETED: "Shipping zone deleted",
+        STAFF_CREATED: "Staff created",
+        STAFF_UPDATED: "Staff updated",
+        STAFF_DELETED: "Staff deleted",
         TRANSACTION_ACTION_REQUEST: "Payment action request",
         TRANSLATION_CREATED: "Create translation",
         TRANSLATION_UPDATED: "Update translation",
@@ -195,10 +242,19 @@ class WebhookEventAsyncType:
 
     CHOICES = [
         (ANY, DISPLAY_LABELS[ANY]),
+        (ADDRESS_CREATED, DISPLAY_LABELS[ADDRESS_CREATED]),
+        (ADDRESS_UPDATED, DISPLAY_LABELS[ADDRESS_UPDATED]),
+        (ADDRESS_DELETED, DISPLAY_LABELS[ADDRESS_DELETED]),
         (APP_INSTALLED, DISPLAY_LABELS[APP_INSTALLED]),
         (APP_UPDATED, DISPLAY_LABELS[APP_UPDATED]),
         (APP_DELETED, DISPLAY_LABELS[APP_DELETED]),
         (APP_STATUS_CHANGED, DISPLAY_LABELS[APP_STATUS_CHANGED]),
+        (ATTRIBUTE_CREATED, DISPLAY_LABELS[ATTRIBUTE_CREATED]),
+        (ATTRIBUTE_UPDATED, DISPLAY_LABELS[ATTRIBUTE_UPDATED]),
+        (ATTRIBUTE_DELETED, DISPLAY_LABELS[ATTRIBUTE_DELETED]),
+        (ATTRIBUTE_VALUE_CREATED, DISPLAY_LABELS[ATTRIBUTE_VALUE_CREATED]),
+        (ATTRIBUTE_VALUE_UPDATED, DISPLAY_LABELS[ATTRIBUTE_VALUE_UPDATED]),
+        (ATTRIBUTE_VALUE_DELETED, DISPLAY_LABELS[ATTRIBUTE_VALUE_DELETED]),
         (CATEGORY_CREATED, DISPLAY_LABELS[CATEGORY_CREATED]),
         (CATEGORY_UPDATED, DISPLAY_LABELS[CATEGORY_UPDATED]),
         (CATEGORY_DELETED, DISPLAY_LABELS[CATEGORY_DELETED]),
@@ -228,11 +284,13 @@ class WebhookEventAsyncType:
         (SALE_CREATED, DISPLAY_LABELS[SALE_CREATED]),
         (SALE_UPDATED, DISPLAY_LABELS[SALE_UPDATED]),
         (SALE_DELETED, DISPLAY_LABELS[SALE_DELETED]),
+        (SALE_TOGGLE, DISPLAY_LABELS[SALE_TOGGLE]),
         (INVOICE_REQUESTED, DISPLAY_LABELS[INVOICE_REQUESTED]),
         (INVOICE_DELETED, DISPLAY_LABELS[INVOICE_DELETED]),
         (INVOICE_SENT, DISPLAY_LABELS[INVOICE_SENT]),
         (CUSTOMER_CREATED, DISPLAY_LABELS[CUSTOMER_CREATED]),
         (CUSTOMER_UPDATED, DISPLAY_LABELS[CUSTOMER_UPDATED]),
+        (CUSTOMER_DELETED, DISPLAY_LABELS[CUSTOMER_DELETED]),
         (COLLECTION_CREATED, DISPLAY_LABELS[COLLECTION_CREATED]),
         (COLLECTION_UPDATED, DISPLAY_LABELS[COLLECTION_UPDATED]),
         (COLLECTION_DELETED, DISPLAY_LABELS[COLLECTION_DELETED]),
@@ -252,12 +310,21 @@ class WebhookEventAsyncType:
         (PAGE_CREATED, DISPLAY_LABELS[PAGE_CREATED]),
         (PAGE_UPDATED, DISPLAY_LABELS[PAGE_UPDATED]),
         (PAGE_DELETED, DISPLAY_LABELS[PAGE_DELETED]),
+        (PAGE_TYPE_CREATED, DISPLAY_LABELS[PAGE_TYPE_CREATED]),
+        (PAGE_TYPE_UPDATED, DISPLAY_LABELS[PAGE_TYPE_UPDATED]),
+        (PAGE_TYPE_DELETED, DISPLAY_LABELS[PAGE_TYPE_DELETED]),
+        (PERMISSION_GROUP_CREATED, DISPLAY_LABELS[PERMISSION_GROUP_CREATED]),
+        (PERMISSION_GROUP_UPDATED, DISPLAY_LABELS[PERMISSION_GROUP_UPDATED]),
+        (PERMISSION_GROUP_DELETED, DISPLAY_LABELS[PERMISSION_GROUP_DELETED]),
         (SHIPPING_PRICE_CREATED, DISPLAY_LABELS[SHIPPING_PRICE_CREATED]),
         (SHIPPING_PRICE_UPDATED, DISPLAY_LABELS[SHIPPING_PRICE_UPDATED]),
         (SHIPPING_PRICE_DELETED, DISPLAY_LABELS[SHIPPING_PRICE_DELETED]),
         (SHIPPING_ZONE_CREATED, DISPLAY_LABELS[SHIPPING_ZONE_CREATED]),
         (SHIPPING_ZONE_UPDATED, DISPLAY_LABELS[SHIPPING_ZONE_UPDATED]),
         (SHIPPING_ZONE_DELETED, DISPLAY_LABELS[SHIPPING_ZONE_DELETED]),
+        (STAFF_CREATED, DISPLAY_LABELS[STAFF_CREATED]),
+        (STAFF_UPDATED, DISPLAY_LABELS[STAFF_UPDATED]),
+        (STAFF_DELETED, DISPLAY_LABELS[STAFF_DELETED]),
         (TRANSACTION_ACTION_REQUEST, DISPLAY_LABELS[TRANSACTION_ACTION_REQUEST]),
         (TRANSLATION_CREATED, DISPLAY_LABELS[TRANSLATION_CREATED]),
         (TRANSLATION_UPDATED, DISPLAY_LABELS[TRANSLATION_UPDATED]),
@@ -273,10 +340,19 @@ class WebhookEventAsyncType:
     ALL = [event[0] for event in CHOICES]
 
     PERMISSIONS = {
+        ADDRESS_CREATED: AccountPermissions.MANAGE_USERS,
+        ADDRESS_UPDATED: AccountPermissions.MANAGE_USERS,
+        ADDRESS_DELETED: AccountPermissions.MANAGE_USERS,
         APP_INSTALLED: AppPermission.MANAGE_APPS,
         APP_UPDATED: AppPermission.MANAGE_APPS,
         APP_DELETED: AppPermission.MANAGE_APPS,
         APP_STATUS_CHANGED: AppPermission.MANAGE_APPS,
+        ATTRIBUTE_CREATED: None,
+        ATTRIBUTE_UPDATED: None,
+        ATTRIBUTE_DELETED: None,
+        ATTRIBUTE_VALUE_CREATED: None,
+        ATTRIBUTE_VALUE_UPDATED: None,
+        ATTRIBUTE_VALUE_DELETED: None,
         CATEGORY_CREATED: ProductPermissions.MANAGE_PRODUCTS,
         CATEGORY_UPDATED: ProductPermissions.MANAGE_PRODUCTS,
         CATEGORY_DELETED: ProductPermissions.MANAGE_PRODUCTS,
@@ -306,11 +382,13 @@ class WebhookEventAsyncType:
         SALE_CREATED: DiscountPermissions.MANAGE_DISCOUNTS,
         SALE_UPDATED: DiscountPermissions.MANAGE_DISCOUNTS,
         SALE_DELETED: DiscountPermissions.MANAGE_DISCOUNTS,
+        SALE_TOGGLE: DiscountPermissions.MANAGE_DISCOUNTS,
         INVOICE_REQUESTED: OrderPermissions.MANAGE_ORDERS,
         INVOICE_DELETED: OrderPermissions.MANAGE_ORDERS,
         INVOICE_SENT: OrderPermissions.MANAGE_ORDERS,
         CUSTOMER_CREATED: AccountPermissions.MANAGE_USERS,
         CUSTOMER_UPDATED: AccountPermissions.MANAGE_USERS,
+        CUSTOMER_DELETED: AccountPermissions.MANAGE_USERS,
         COLLECTION_CREATED: ProductPermissions.MANAGE_PRODUCTS,
         COLLECTION_UPDATED: ProductPermissions.MANAGE_PRODUCTS,
         COLLECTION_DELETED: ProductPermissions.MANAGE_PRODUCTS,
@@ -330,12 +408,21 @@ class WebhookEventAsyncType:
         PAGE_CREATED: PagePermissions.MANAGE_PAGES,
         PAGE_UPDATED: PagePermissions.MANAGE_PAGES,
         PAGE_DELETED: PagePermissions.MANAGE_PAGES,
+        PAGE_TYPE_CREATED: PageTypePermissions.MANAGE_PAGE_TYPES_AND_ATTRIBUTES,
+        PAGE_TYPE_UPDATED: PageTypePermissions.MANAGE_PAGE_TYPES_AND_ATTRIBUTES,
+        PAGE_TYPE_DELETED: PageTypePermissions.MANAGE_PAGE_TYPES_AND_ATTRIBUTES,
+        PERMISSION_GROUP_CREATED: AccountPermissions.MANAGE_STAFF,
+        PERMISSION_GROUP_UPDATED: AccountPermissions.MANAGE_STAFF,
+        PERMISSION_GROUP_DELETED: AccountPermissions.MANAGE_STAFF,
         SHIPPING_PRICE_CREATED: ShippingPermissions.MANAGE_SHIPPING,
         SHIPPING_PRICE_UPDATED: ShippingPermissions.MANAGE_SHIPPING,
         SHIPPING_PRICE_DELETED: ShippingPermissions.MANAGE_SHIPPING,
         SHIPPING_ZONE_CREATED: ShippingPermissions.MANAGE_SHIPPING,
         SHIPPING_ZONE_UPDATED: ShippingPermissions.MANAGE_SHIPPING,
         SHIPPING_ZONE_DELETED: ShippingPermissions.MANAGE_SHIPPING,
+        STAFF_CREATED: AccountPermissions.MANAGE_STAFF,
+        STAFF_UPDATED: AccountPermissions.MANAGE_STAFF,
+        STAFF_DELETED: AccountPermissions.MANAGE_STAFF,
         TRANSACTION_ACTION_REQUEST: PaymentPermissions.HANDLE_PAYMENTS,
         TRANSLATION_CREATED: SitePermissions.MANAGE_TRANSLATIONS,
         TRANSLATION_UPDATED: SitePermissions.MANAGE_TRANSLATIONS,
@@ -358,6 +445,9 @@ class WebhookEventSyncType:
     PAYMENT_CONFIRM = "payment_confirm"
     PAYMENT_PROCESS = "payment_process"
 
+    CHECKOUT_CALCULATE_TAXES = "checkout_calculate_taxes"
+    ORDER_CALCULATE_TAXES = "order_calculate_taxes"
+
     SHIPPING_LIST_METHODS_FOR_CHECKOUT = "shipping_list_methods_for_checkout"
     CHECKOUT_FILTER_SHIPPING_METHODS = "checkout_filter_shipping_methods"
     ORDER_FILTER_SHIPPING_METHODS = "order_filter_shipping_methods"
@@ -370,6 +460,8 @@ class WebhookEventSyncType:
         PAYMENT_PROCESS: "Process payment",
         PAYMENT_REFUND: "Refund payment",
         PAYMENT_VOID: "Void payment",
+        CHECKOUT_CALCULATE_TAXES: "Checkout calculate taxes",
+        ORDER_CALCULATE_TAXES: "Order calculate taxes",
         SHIPPING_LIST_METHODS_FOR_CHECKOUT: "Shipping list methods for checkout",
         ORDER_FILTER_SHIPPING_METHODS: "Filter order shipping methods",
         CHECKOUT_FILTER_SHIPPING_METHODS: "Filter checkout shipping methods",
@@ -383,6 +475,8 @@ class WebhookEventSyncType:
         (PAYMENT_PROCESS, DISPLAY_LABELS[PAYMENT_PROCESS]),
         (PAYMENT_REFUND, DISPLAY_LABELS[PAYMENT_REFUND]),
         (PAYMENT_VOID, DISPLAY_LABELS[PAYMENT_VOID]),
+        (CHECKOUT_CALCULATE_TAXES, DISPLAY_LABELS[CHECKOUT_CALCULATE_TAXES]),
+        (ORDER_CALCULATE_TAXES, DISPLAY_LABELS[ORDER_CALCULATE_TAXES]),
         (
             SHIPPING_LIST_METHODS_FOR_CHECKOUT,
             DISPLAY_LABELS[SHIPPING_LIST_METHODS_FOR_CHECKOUT],
@@ -414,82 +508,9 @@ class WebhookEventSyncType:
         PAYMENT_PROCESS: PaymentPermissions.HANDLE_PAYMENTS,
         PAYMENT_REFUND: PaymentPermissions.HANDLE_PAYMENTS,
         PAYMENT_VOID: PaymentPermissions.HANDLE_PAYMENTS,
+        CHECKOUT_CALCULATE_TAXES: CheckoutPermissions.HANDLE_TAXES,
+        ORDER_CALCULATE_TAXES: CheckoutPermissions.HANDLE_TAXES,
         SHIPPING_LIST_METHODS_FOR_CHECKOUT: ShippingPermissions.MANAGE_SHIPPING,
         ORDER_FILTER_SHIPPING_METHODS: OrderPermissions.MANAGE_ORDERS,
         CHECKOUT_FILTER_SHIPPING_METHODS: CheckoutPermissions.MANAGE_CHECKOUTS,
     }
-
-
-SUBSCRIBABLE_EVENTS = [
-    WebhookEventAsyncType.APP_INSTALLED,
-    WebhookEventAsyncType.APP_UPDATED,
-    WebhookEventAsyncType.APP_DELETED,
-    WebhookEventAsyncType.APP_STATUS_CHANGED,
-    WebhookEventAsyncType.CATEGORY_CREATED,
-    WebhookEventAsyncType.CATEGORY_UPDATED,
-    WebhookEventAsyncType.CATEGORY_DELETED,
-    WebhookEventAsyncType.CHANNEL_CREATED,
-    WebhookEventAsyncType.CHANNEL_UPDATED,
-    WebhookEventAsyncType.CHANNEL_DELETED,
-    WebhookEventAsyncType.CHANNEL_STATUS_CHANGED,
-    WebhookEventAsyncType.GIFT_CARD_CREATED,
-    WebhookEventAsyncType.GIFT_CARD_UPDATED,
-    WebhookEventAsyncType.GIFT_CARD_DELETED,
-    WebhookEventAsyncType.GIFT_CARD_STATUS_CHANGED,
-    WebhookEventAsyncType.MENU_CREATED,
-    WebhookEventAsyncType.MENU_UPDATED,
-    WebhookEventAsyncType.MENU_DELETED,
-    WebhookEventAsyncType.MENU_ITEM_CREATED,
-    WebhookEventAsyncType.MENU_ITEM_UPDATED,
-    WebhookEventAsyncType.MENU_ITEM_DELETED,
-    WebhookEventAsyncType.ORDER_CREATED,
-    WebhookEventAsyncType.ORDER_UPDATED,
-    WebhookEventAsyncType.ORDER_CONFIRMED,
-    WebhookEventAsyncType.ORDER_FULLY_PAID,
-    WebhookEventAsyncType.ORDER_FULFILLED,
-    WebhookEventAsyncType.ORDER_CANCELLED,
-    WebhookEventAsyncType.DRAFT_ORDER_CREATED,
-    WebhookEventAsyncType.DRAFT_ORDER_UPDATED,
-    WebhookEventAsyncType.DRAFT_ORDER_DELETED,
-    WebhookEventAsyncType.PRODUCT_CREATED,
-    WebhookEventAsyncType.PRODUCT_UPDATED,
-    WebhookEventAsyncType.PRODUCT_DELETED,
-    WebhookEventAsyncType.PRODUCT_VARIANT_DELETED,
-    WebhookEventAsyncType.PRODUCT_VARIANT_CREATED,
-    WebhookEventAsyncType.PRODUCT_VARIANT_UPDATED,
-    WebhookEventAsyncType.PRODUCT_VARIANT_BACK_IN_STOCK,
-    WebhookEventAsyncType.PRODUCT_VARIANT_OUT_OF_STOCK,
-    WebhookEventAsyncType.SALE_CREATED,
-    WebhookEventAsyncType.SALE_UPDATED,
-    WebhookEventAsyncType.SALE_DELETED,
-    WebhookEventAsyncType.INVOICE_REQUESTED,
-    WebhookEventAsyncType.INVOICE_DELETED,
-    WebhookEventAsyncType.INVOICE_SENT,
-    WebhookEventAsyncType.FULFILLMENT_CREATED,
-    WebhookEventAsyncType.FULFILLMENT_CANCELED,
-    WebhookEventAsyncType.CUSTOMER_CREATED,
-    WebhookEventAsyncType.CUSTOMER_UPDATED,
-    WebhookEventAsyncType.COLLECTION_CREATED,
-    WebhookEventAsyncType.COLLECTION_UPDATED,
-    WebhookEventAsyncType.COLLECTION_DELETED,
-    WebhookEventAsyncType.CHECKOUT_CREATED,
-    WebhookEventAsyncType.CHECKOUT_UPDATED,
-    WebhookEventAsyncType.PAGE_CREATED,
-    WebhookEventAsyncType.PAGE_UPDATED,
-    WebhookEventAsyncType.PAGE_DELETED,
-    WebhookEventAsyncType.SHIPPING_PRICE_CREATED,
-    WebhookEventAsyncType.SHIPPING_PRICE_UPDATED,
-    WebhookEventAsyncType.SHIPPING_PRICE_DELETED,
-    WebhookEventAsyncType.SHIPPING_ZONE_CREATED,
-    WebhookEventAsyncType.SHIPPING_ZONE_UPDATED,
-    WebhookEventAsyncType.SHIPPING_ZONE_DELETED,
-    WebhookEventAsyncType.TRANSACTION_ACTION_REQUEST,
-    WebhookEventAsyncType.TRANSLATION_CREATED,
-    WebhookEventAsyncType.TRANSLATION_UPDATED,
-    WebhookEventAsyncType.VOUCHER_CREATED,
-    WebhookEventAsyncType.VOUCHER_UPDATED,
-    WebhookEventAsyncType.VOUCHER_DELETED,
-    WebhookEventAsyncType.WAREHOUSE_CREATED,
-    WebhookEventAsyncType.WAREHOUSE_UPDATED,
-    WebhookEventAsyncType.WAREHOUSE_DELETED,
-]

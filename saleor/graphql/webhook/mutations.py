@@ -8,23 +8,8 @@ from ..core.descriptions import ADDED_IN_32, DEPRECATED_IN_3X_INPUT, PREVIEW_FEA
 from ..core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
 from ..core.types import NonNullList, WebhookError
 from . import enums
-from .subscription_payload import validate_subscription_query
+from .subscription_payload import validate_query
 from .types import EventDelivery, Webhook
-
-
-def validate_query(query):
-    if not query:
-        return
-    is_valid = validate_subscription_query(query)
-    if not is_valid:
-        raise ValidationError(
-            {
-                "query": ValidationError(
-                    "Subscription query is not valid",
-                    code=WebhookErrorCode.INVALID.value,
-                )
-            }
-        )
 
 
 class WebhookCreateInput(graphene.InputObjectType):
@@ -53,7 +38,9 @@ class WebhookCreateInput(graphene.InputObjectType):
         description="Determine if webhook will be set active or not.", required=False
     )
     secret_key = graphene.String(
-        description="The secret key used to create a hash signature with each payload.",
+        description="The secret key used to create a hash signature with each payload."
+        f"{DEPRECATED_IN_3X_INPUT} As of Saleor 3.5, webhook payloads default to "
+        "signing using a verifiable JWS.",
         required=False,
     )
     query = graphene.String(
@@ -170,7 +157,10 @@ class WebhookUpdateInput(graphene.InputObjectType):
         description="Determine if webhook will be set active or not.", required=False
     )
     secret_key = graphene.String(
-        description="Use to create a hash signature with each payload.", required=False
+        description="Use to create a hash signature with each payload."
+        f"{DEPRECATED_IN_3X_INPUT} As of Saleor 3.5, webhook payloads default to "
+        "signing using a verifiable JWS.",
+        required=False,
     )
     query = graphene.String(
         description="Subscription query used to define a webhook payload."

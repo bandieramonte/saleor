@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 
 from ....core import EventDeliveryStatus
+from ....tests.consts import TEST_SERVER_DOMAIN
 from ....webhook.event_types import WebhookEventAsyncType
 from ..exceptions import TruncationError
 from ..obfuscation import MASK
@@ -35,6 +36,7 @@ from ..payloads import (
     pretty_json,
     serialize_gql_operation_result,
     serialize_gql_operation_results,
+    serialize_headers,
     to_camel_case,
 )
 from ..utils import GraphQLOperationResponse
@@ -212,6 +214,21 @@ def test_serialize_gql_operation_results_when_too_low_bytes_limit(
         )
 
 
+@pytest.mark.parametrize(
+    "headers,expected",
+    [
+        ({}, []),
+        (None, []),
+        (
+            {"Content-Length": "19", "Content-Type": "application/json"},
+            [("Content-Length", "19"), ("Content-Type", "application/json")],
+        ),
+    ],
+)
+def test_serialize_headers(headers, expected):
+    assert serialize_headers(headers) == expected
+
+
 def test_generate_api_call_payload(app, rf, gql_operation_factory):
     request = rf.post(
         "/graphql", data={"request": "data"}, content_type="application/json"
@@ -237,7 +254,7 @@ def test_generate_api_call_payload(app, rf, gql_operation_factory):
         request=ApiCallRequest(
             id=request_id,
             method="POST",
-            url="http://testserver/graphql",
+            url=f"http://{TEST_SERVER_DOMAIN}/graphql",
             time=request.request_time.timestamp(),
             content_length=19,
             headers=[

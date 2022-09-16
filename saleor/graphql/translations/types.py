@@ -69,6 +69,7 @@ class AttributeValueTranslation(BaseTranslationType):
     id = graphene.GlobalID(required=True)
     name = graphene.String(required=True)
     rich_text = JSONString(description="Attribute value." + RICH_CONTENT)
+    plain_text = graphene.String(description="Attribute plain text value.")
 
     class Meta:
         model = attribute_models.AttributeValueTranslation
@@ -79,6 +80,7 @@ class AttributeValueTranslatableContent(ModelObjectType):
     id = graphene.GlobalID(required=True)
     name = graphene.String(required=True)
     rich_text = JSONString(description="Attribute value." + RICH_CONTENT)
+    plain_text = graphene.String(description="Attribute plain text value.")
     translation = TranslationField(
         AttributeValueTranslation, type_name="attribute value"
     )
@@ -181,6 +183,7 @@ class ProductTranslation(BaseTranslationType):
     seo_title = graphene.String()
     seo_description = graphene.String()
     name = graphene.String()
+    shortDescription = graphene.String()
     description = JSONString(
         description="Translated description of the product." + RICH_CONTENT
     )
@@ -188,13 +191,6 @@ class ProductTranslation(BaseTranslationType):
         description="Translated description of the product." + RICH_CONTENT,
         deprecation_reason=(
             f"{DEPRECATED_IN_3X_FIELD} Use the `description` field instead."
-        ),
-    )
-    longDescription = JSONString()
-    longDescription_json = JSONString(
-        description="Translated long description of the product (JSON).",
-        deprecation_reason=(
-            f"{DEPRECATED_IN_3X_FIELD} Use the `longDescription` field instead."
         ),
     )
 
@@ -213,18 +209,12 @@ class ProductTranslatableContent(ModelObjectType):
     seo_title = graphene.String()
     seo_description = graphene.String()
     name = graphene.String(required=True)
+    shortDescription = graphene.String(required=True)
     description = JSONString(description="Description of the product." + RICH_CONTENT)
     description_json = JSONString(
         description="Description of the product." + RICH_CONTENT,
         deprecation_reason=(
             f"{DEPRECATED_IN_3X_FIELD} Use the `description` field instead."
-        ),
-    )
-    longDescription = JSONString()
-    longDescription_json = JSONString(
-        description="Long description of the product (JSON).",
-        deprecation_reason=(
-            f"{DEPRECATED_IN_3X_FIELD} Use the `longDescription` field instead."
         ),
     )
 

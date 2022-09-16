@@ -184,6 +184,66 @@ def test_apply_tax_to_price_no_taxes_raise_typeerror_for_invalid_type():
         assert apply_tax_to_price(None, "standard", 100)
 
 
+@override_settings(PLUGINS=["saleor.plugins.vatlayer.plugin.VatlayerPlugin"])
+def test_assign_tax_code_to_object_meta(vatlayer, product):
+    # given
+    manager = get_plugins_manager()
+    tax_code = "standard"
+
+    # when
+    manager.assign_tax_code_to_object_meta(product, tax_code)
+
+    # then
+    assert product.metadata == {
+        VatlayerPlugin.META_CODE_KEY: tax_code,
+        VatlayerPlugin.META_DESCRIPTION_KEY: tax_code,
+    }
+
+
+@override_settings(PLUGINS=["saleor.plugins.vatlayer.plugin.VatlayerPlugin"])
+def test_assign_tax_code_to_object_meta_none_as_tax_code(vatlayer, product):
+    # given
+    manager = get_plugins_manager()
+    tax_code = None
+
+    # when
+    manager.assign_tax_code_to_object_meta(product, tax_code)
+
+    # then
+    assert product.metadata == {}
+
+
+@override_settings(PLUGINS=["saleor.plugins.vatlayer.plugin.VatlayerPlugin"])
+def test_assign_tax_code_to_object_meta_no_obj_id_and_none_as_tax_code(vatlayer):
+    # given
+    manager = get_plugins_manager()
+    product = Product(name="A new product.")
+    tax_code = None
+
+    # when
+    manager.assign_tax_code_to_object_meta(product, tax_code)
+
+    # then
+    assert product.metadata == {}
+
+
+@override_settings(PLUGINS=["saleor.plugins.vatlayer.plugin.VatlayerPlugin"])
+def test_assign_tax_code_to_object_meta_no_obj_id(vatlayer):
+    # given
+    manager = get_plugins_manager()
+    product = Product(name="A new product.")
+    tax_code = "standard"
+
+    # when
+    manager.assign_tax_code_to_object_meta(product, tax_code)
+
+    # then
+    assert product.metadata == {
+        VatlayerPlugin.META_CODE_KEY: tax_code,
+        VatlayerPlugin.META_DESCRIPTION_KEY: tax_code,
+    }
+
+
 @pytest.mark.parametrize(
     "with_discount, expected_net, expected_gross, voucher_amount, taxes_in_prices",
     [
@@ -368,10 +428,10 @@ def test_calculate_checkout_total_with_excluded_country(
 @pytest.mark.parametrize(
     "with_discount, expected_net, expected_gross, taxes_in_prices",
     [
-        (True, "25.00", "30.75", False),
-        (False, "40.65", "50.00", True),
-        (False, "50.00", "61.50", False),
         (True, "20.35", "25.00", True),
+        (False, "40.65", "50.00", True),
+        (True, "25.00", "30.75", False),
+        (False, "50.00", "61.50", False),
     ],
 )
 @override_settings(PLUGINS=["saleor.plugins.vatlayer.plugin.VatlayerPlugin"])
@@ -666,7 +726,7 @@ def test_calculate_checkout_line_total(
         checkout_line_info,
         address,
         [],
-    ).price_with_sale
+    )
 
     assert line_price == TaxedMoney(
         net=Money("8.13", "USD") * line.quantity,
@@ -713,7 +773,7 @@ def test_calculate_checkout_line_total_voucher_on_entire_order(
         checkout_line_info,
         address,
         [],
-    ).price_with_discounts
+    )
 
     # then
     currency = checkout_with_item.currency
@@ -757,7 +817,7 @@ def test_calculate_checkout_line_total_from_origin_country(
         checkout_line_info,
         address,
         [],
-    ).price_with_sale
+    )
 
     # make sure that we applied DE taxes (19%)
     assert line_price == TaxedMoney(
@@ -796,7 +856,7 @@ def test_calculate_checkout_line_total_with_excluded_country(
         checkout_line_info,
         address,
         [],
-    ).price_with_sale
+    )
 
     assert line_price == TaxedMoney(
         net=Money("10.00", "USD") * line.quantity,
@@ -968,7 +1028,7 @@ def test_calculate_checkout_line_unit_price(
 
     variant = line.variant
     product = variant.product
-    manager.assign_tax_code_to_object_meta(variant.product, "standard")
+    manager.assign_tax_code_to_object_meta(product, "standard")
     product.save()
 
     lines, _ = fetch_checkout_lines(checkout_with_item)
@@ -981,7 +1041,7 @@ def test_calculate_checkout_line_unit_price(
         checkout_line_info,
         address,
         [],
-    ).price_with_sale
+    )
 
     assert line_price == TaxedMoney(
         net=Money("8.13", "USD"), gross=Money("10.00", "USD")
@@ -1025,7 +1085,7 @@ def test_calculate_checkout_line_unit_price_with_voucher_one_line(
         checkout_line_info,
         address,
         [],
-    ).price_with_discounts
+    )
 
     # then
     currency = checkout_with_item.currency
@@ -1087,7 +1147,7 @@ def test_calculate_checkout_line_unit_price_with_voucher_multiple_lines(
         checkout_line_info,
         address,
         [],
-    ).price_with_discounts
+    )
 
     # then
     currency = checkout_with_item.currency
@@ -1157,7 +1217,7 @@ def test_calculate_checkout_line_unit_price_with_voucher_multiple_lines_last_lin
         checkout_line_info,
         address,
         [],
-    ).price_with_discounts
+    )
 
     # then
     discount_amount = (
@@ -1212,7 +1272,7 @@ def test_calculate_checkout_line_unit_price_with_shipping_voucher(
         checkout_line_info,
         address,
         [],
-    ).price_with_discounts
+    )
 
     # then
     assert line_price == TaxedMoney(

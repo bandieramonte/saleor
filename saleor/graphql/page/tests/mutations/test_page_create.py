@@ -9,6 +9,7 @@ from freezegun import freeze_time
 
 from .....page.error_codes import PageErrorCode
 from .....page.models import Page, PageType
+from .....tests.consts import TEST_SERVER_DOMAIN
 from .....tests.utils import dummy_editorjs
 from .....webhook.event_types import WebhookEventAsyncType
 from .....webhook.payloads import generate_page_payload
@@ -39,6 +40,7 @@ CREATE_PAGE_MUTATION = """
                         reference
                         date
                         dateTime
+                        plainText
                         file {
                             url
                             contentType
@@ -408,10 +410,11 @@ def test_create_page_with_file_attribute(
                 "slug": f"{attr_value.slug}-2",
                 "name": attr_value.name,
                 "file": {
-                    "url": f"http://testserver/media/{attr_value.file_url}",
+                    "url": f"http://{TEST_SERVER_DOMAIN}/media/{attr_value.file_url}",
                     "contentType": None,
                 },
                 "reference": None,
+                "plainText": None,
                 "date": None,
                 "dateTime": None,
             }
@@ -486,9 +489,10 @@ def test_create_page_with_file_attribute_new_attribute_value(
                 "reference": None,
                 "name": new_value,
                 "file": {
-                    "url": "http://testserver/media/" + new_value,
+                    "url": f"http://{TEST_SERVER_DOMAIN}/media/" + new_value,
                     "contentType": new_value_content_type,
                 },
+                "plainText": None,
                 "date": None,
                 "dateTime": None,
             }
@@ -658,6 +662,7 @@ def test_create_page_with_page_reference_attribute(
                 "file": None,
                 "name": page.title,
                 "reference": reference,
+                "plainText": None,
                 "date": None,
                 "dateTime": None,
             }
@@ -717,6 +722,7 @@ def test_create_page_with_date_attribute(
             {
                 "file": None,
                 "reference": None,
+                "plainText": None,
                 "dateTime": None,
                 "date": str(date_value),
                 "name": str(date_value),
@@ -776,10 +782,71 @@ def test_create_page_with_date_time_attribute(
             {
                 "file": None,
                 "reference": None,
+                "plainText": None,
                 "dateTime": date_time_value.isoformat(),
                 "date": None,
                 "name": str(date_time_value),
                 "slug": f"{new_page_pk}_{date_time_attribute.id}",
+            }
+        ],
+    }
+
+    assert expected_attributes_data in data["page"]["attributes"]
+
+
+def test_create_page_with_plain_text_attribute(
+    staff_api_client,
+    permission_manage_pages,
+    page_type,
+    plain_text_attribute_page_type,
+    page,
+):
+    # given
+    page_type.page_attributes.add(plain_text_attribute_page_type)
+
+    page_title = "test title"
+    page_type_id = graphene.Node.to_global_id("PageType", page_type.pk)
+    plain_text_attribute_id = graphene.Node.to_global_id(
+        "Attribute", plain_text_attribute_page_type.id
+    )
+    text = "test plain text attribute content"
+
+    variables = {
+        "input": {
+            "title": page_title,
+            "pageType": page_type_id,
+            "attributes": [
+                {"id": plain_text_attribute_id, "plainText": text},
+            ],
+        }
+    }
+
+    # when
+    response = staff_api_client.post_graphql(
+        CREATE_PAGE_MUTATION, variables, permissions=[permission_manage_pages]
+    )
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["pageCreate"]
+    errors = data["errors"]
+
+    assert not errors
+    assert data["page"]["title"] == page_title
+    assert data["page"]["pageType"]["id"] == page_type_id
+    page_id = data["page"]["id"]
+    _, new_page_pk = graphene.Node.from_global_id(page_id)
+    expected_attributes_data = {
+        "attribute": {"slug": plain_text_attribute_page_type.slug},
+        "values": [
+            {
+                "file": None,
+                "reference": None,
+                "dateTime": None,
+                "date": None,
+                "name": text,
+                "plainText": text,
+                "slug": f"{new_page_pk}_{plain_text_attribute_page_type.id}",
             }
         ],
     }
@@ -955,6 +1022,7 @@ def test_create_page_with_product_reference_attribute(
                 "file": None,
                 "name": product.name,
                 "reference": reference,
+                "plainText": None,
                 "dateTime": None,
                 "date": None,
             }
