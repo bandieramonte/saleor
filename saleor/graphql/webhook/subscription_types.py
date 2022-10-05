@@ -30,6 +30,7 @@ from ..core.descriptions import (
     ADDED_IN_34,
     ADDED_IN_35,
     ADDED_IN_36,
+    ADDED_IN_37,
     PREVIEW_FEATURE,
 )
 from ..core.scalars import PositiveDecimal
@@ -815,6 +816,14 @@ class FulfillmentCanceled(ObjectType, FulfillmentBase):
         interfaces = (Event,)
         description = (
             "Event sent when fulfillment is canceled." + ADDED_IN_34 + PREVIEW_FEATURE
+        )
+
+
+class FulfillmentApproved(ObjectType, FulfillmentBase):
+    class Meta:
+        interfaces = (Event,)
+        description = (
+            "Event sent when fulfillment is approved." + ADDED_IN_37 + PREVIEW_FEATURE
         )
 
 
@@ -2293,6 +2302,7 @@ WEBHOOK_TYPES_MAP = {
     WebhookEventAsyncType.INVOICE_SENT: InvoiceSent,
     WebhookEventAsyncType.FULFILLMENT_CREATED: FulfillmentCreated,
     WebhookEventAsyncType.FULFILLMENT_CANCELED: FulfillmentCanceled,
+    WebhookEventAsyncType.FULFILLMENT_APPROVED: FulfillmentApproved,
     WebhookEventAsyncType.CUSTOMER_CREATED: CustomerCreated,
     WebhookEventAsyncType.CUSTOMER_UPDATED: CustomerUpdated,
     WebhookEventAsyncType.COLLECTION_CREATED: CollectionCreated,
