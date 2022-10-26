@@ -1,7 +1,7 @@
 from unittest import mock
 
 import pytest
-from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import ValidationError
 from django.test import override_settings
 
 from ...account import CustomerEvents
@@ -221,7 +221,7 @@ def test_create_order_captured_payment_creates_expected_events_anonymous_user(
             discounts=None,
             taxes_included_in_prices=True,
         ),
-        user=AnonymousUser(),
+        user=None,
         app=None,
         manager=manager,
     )
@@ -479,7 +479,7 @@ def test_create_order_preauth_payment_creates_expected_events_anonymous_user(
             discounts=[],
             taxes_included_in_prices=True,
         ),
-        user=AnonymousUser(),
+        user=None,
         app=None,
         manager=manager,
     )
@@ -659,7 +659,7 @@ def test_create_order_with_gift_card(
             discounts=None,
             taxes_included_in_prices=True,
         ),
-        user=customer_user if not is_anonymous_user else AnonymousUser(),
+        user=customer_user if not is_anonymous_user else None,
         app=None,
         manager=manager,
     )
@@ -865,7 +865,7 @@ def test_create_order_gift_card_bought(
             discounts=None,
             taxes_included_in_prices=True,
         ),
-        user=customer_user if not is_anonymous_user else AnonymousUser(),
+        user=customer_user if not is_anonymous_user else None,
         app=None,
         manager=manager,
     )
@@ -946,7 +946,7 @@ def test_create_order_gift_card_bought_order_not_captured_gift_cards_not_sent(
             discounts=None,
             taxes_included_in_prices=True,
         ),
-        user=customer_user if not is_anonymous_user else AnonymousUser(),
+        user=customer_user if not is_anonymous_user else None,
         app=None,
         manager=manager,
     )
@@ -1010,7 +1010,7 @@ def test_create_order_gift_card_bought_only_shippable_gift_card(
             discounts=None,
             taxes_included_in_prices=True,
         ),
-        user=customer_user if not is_anonymous_user else AnonymousUser(),
+        user=customer_user if not is_anonymous_user else None,
         app=None,
         manager=manager,
     )
@@ -1070,7 +1070,7 @@ def test_create_order_gift_card_bought_do_not_fulfill_gift_cards_automatically(
             discounts=None,
             taxes_included_in_prices=True,
         ),
-        user=customer_user if not is_anonymous_user else AnonymousUser(),
+        user=customer_user if not is_anonymous_user else None,
         app=None,
         manager=manager,
     )
@@ -1458,3 +1458,67 @@ def test_process_shipping_data_for_order_dont_store_customer_click_and_collect_a
     new_address_data = warehouse_for_cc.address.as_data()
     assert new_user_address_count == user_address_count
     assert not customer_user.addresses.filter(**new_address_data).exists()
+
+
+@mock.patch("saleor.payment.gateway.payment_refund_or_void")
+def test_complete_checkout_invalid_shipping_method(
+    mocked_payment_refund_or_void,
+    voucher,
+    customer_user,
+    checkout_ready_to_complete,
+    app,
+    payment_txn_to_confirm,
+):
+    """Ensure that when an error in _prepare_checkout method is raised
+    the method for refund or void is called."""
+    # given
+    checkout = checkout_ready_to_complete
+
+    payment = Payment.objects.create(
+        gateway="mirumee.payments.dummy", is_active=True, checkout=checkout
+    )
+    payment.to_confirm = True
+    payment.save()
+
+    checkout.user = customer_user
+    checkout.billing_address = customer_user.default_billing_address
+    checkout.shipping_address = customer_user.default_billing_address
+    checkout.tracking_code = ""
+    checkout.redirect_url = "https://www.example.com"
+
+    checkout.voucher_code = voucher.code
+    checkout.save()
+
+    # make the current shipping method invalid
+    checkout.shipping_method.channel_listings.filter(channel=checkout.channel).delete()
+
+    voucher.apply_once_per_customer = True
+    voucher.save()
+    manager = get_plugins_manager()
+    lines, _ = fetch_checkout_lines(checkout)
+    checkout_info = fetch_checkout_info(checkout, lines, [], manager)
+
+    # when
+    with pytest.raises(ValidationError):
+        order, action_required, _ = complete_checkout(
+            checkout_info=checkout_info,
+            manager=manager,
+            lines=lines,
+            payment_data={},
+            store_source=False,
+            discounts=None,
+            user=customer_user,
+            app=app,
+        )
+
+        # then
+        voucher_customer = VoucherCustomer.objects.filter(
+            voucher=voucher, customer_email=customer_user.email
+        )
+        assert not order
+        assert action_required is True
+        assert not voucher_customer.exists()
+
+    mocked_payment_refund_or_void.called_once_with(
+        payment, manager, channel_slug=checkout.channel.slug
+    )

@@ -749,15 +749,19 @@ def complete_checkout(
     checkout = checkout_info.checkout
     channel_slug = checkout_info.channel.slug
     payment = checkout.get_last_active_payment()
-    _prepare_checkout(
-        manager=manager,
-        checkout_info=checkout_info,
-        lines=lines,
-        discounts=discounts,
-        tracking_code=tracking_code,
-        redirect_url=redirect_url,
-        payment=payment,
-    )
+    try:
+        _prepare_checkout(
+            manager=manager,
+            checkout_info=checkout_info,
+            lines=lines,
+            discounts=discounts,
+            tracking_code=tracking_code,
+            redirect_url=redirect_url,
+            payment=payment,
+        )
+    except ValidationError as exc:
+        gateway.payment_refund_or_void(payment, manager, channel_slug=channel_slug)
+        raise exc
 
     if site_settings is None:
         site_settings = Site.objects.get_current().settings
@@ -771,7 +775,7 @@ def complete_checkout(
         raise exc
 
     customer_id = None
-    if payment and user.is_authenticated:
+    if payment and user:
         customer_id = fetch_customer_id(user=user, gateway=payment.gateway)
 
     action_required = False
@@ -787,7 +791,7 @@ def complete_checkout(
             channel_slug=channel_slug,
         )
 
-        if txn.customer_id and user.is_authenticated:
+        if txn.customer_id and user:
             store_customer_id(user, payment.gateway, txn.customer_id)  # type: ignore
 
         action_required = txn.action_required

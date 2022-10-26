@@ -27,7 +27,7 @@ from .api import API_PATH, schema
 from .context import get_context_value
 from .core.validators.query_cost import validate_query_cost
 from .query_cost_map import COST_MAP
-from .utils import format_error, query_fingerprint
+from .utils import format_error, query_fingerprint, query_identifier
 
 INT_ERROR_MSG = "Int cannot represent non 32-bit signed integer value"
 
@@ -176,7 +176,10 @@ class GraphQLView(View):
             span.set_tag("http.useragent", request.META.get("HTTP_USER_AGENT", ""))
             span.set_tag("span.type", "web")
 
-            request_ips = request.META.get(settings.REAL_IP_ENVIRON, "")
+            main_ip_header = settings.REAL_IP_ENVIRON[0]
+            additional_ip_headers = settings.REAL_IP_ENVIRON[1:]
+
+            request_ips = request.META.get(main_ip_header, "")
             for ip in request_ips.split(","):
                 if is_valid_ipv4(ip):
                     span.set_tag(opentracing.tags.PEER_HOST_IPV4, ip)
@@ -185,6 +188,9 @@ class GraphQLView(View):
                 else:
                     continue
                 break
+            for additional_ip_header in additional_ip_headers:
+                if request_ips := request.META.get(additional_ip_header):
+                    span.set_tag(f"ip_{additional_ip_header}", request_ips[:100])
 
             response = self._handle_query(request)
             span.set_tag(opentracing.tags.HTTP_STATUS_CODE, response.status_code)
@@ -289,6 +295,7 @@ class GraphQLView(View):
             if document is not None:
                 raw_query_string = document.document_string
                 span.set_tag("graphql.query", raw_query_string)
+                span.set_tag("graphql.query_identifier", query_identifier(document))
                 span.set_tag("graphql.query_fingerprint", query_fingerprint(document))
                 try:
                     query_contains_schema = self.check_if_query_contains_only_schema(

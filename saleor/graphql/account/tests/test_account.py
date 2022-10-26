@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import timedelta
 from unittest.mock import ANY, MagicMock, Mock, call, patch
 from urllib.parse import urlencode
+from uuid import uuid4
 
 import graphene
 import pytest
@@ -37,7 +38,6 @@ from ....core.utils.url import prepare_url
 from ....order import OrderStatus
 from ....order.models import FulfillmentStatus, Order
 from ....product.tests.utils import create_image
-from ....tests.consts import TEST_SERVER_DOMAIN
 from ....thumbnail.models import Thumbnail
 from ....webhook.event_types import WebhookEventAsyncType
 from ....webhook.payloads import (
@@ -780,7 +780,7 @@ USER_AVATAR_QUERY = """
 
 
 def test_query_user_avatar_with_size_and_format_proxy_url_returned(
-    staff_api_client, media_root, permission_manage_staff
+    staff_api_client, media_root, permission_manage_staff, site_settings
 ):
     # given
     user = staff_api_client.user
@@ -803,14 +803,15 @@ def test_query_user_avatar_with_size_and_format_proxy_url_returned(
     # then
     content = get_graphql_content(response)
     data = content["data"]["user"]
+    domain = site_settings.site.domain
     assert (
         data["avatar"]["url"]
-        == f"http://{TEST_SERVER_DOMAIN}/thumbnail/{user_uuid}/128/{format.lower()}/"
+        == f"http://{domain}/thumbnail/{user_uuid}/128/{format.lower()}/"
     )
 
 
 def test_query_user_avatar_with_size_proxy_url_returned(
-    staff_api_client, media_root, permission_manage_staff
+    staff_api_client, media_root, permission_manage_staff, site_settings
 ):
     # given
     user = staff_api_client.user
@@ -833,12 +834,12 @@ def test_query_user_avatar_with_size_proxy_url_returned(
     data = content["data"]["user"]
     assert (
         data["avatar"]["url"]
-        == f"http://{TEST_SERVER_DOMAIN}/thumbnail/{user_uuid}/128/"
+        == f"http://{site_settings.site.domain}/thumbnail/{user_uuid}/128/"
     )
 
 
 def test_query_user_avatar_with_size_thumbnail_url_returned(
-    staff_api_client, media_root, permission_manage_staff
+    staff_api_client, media_root, permission_manage_staff, site_settings
 ):
     # given
     user = staff_api_client.user
@@ -864,12 +865,12 @@ def test_query_user_avatar_with_size_thumbnail_url_returned(
     data = content["data"]["user"]
     assert (
         data["avatar"]["url"]
-        == f"http://{TEST_SERVER_DOMAIN}/media/thumbnails/{thumbnail_mock.name}"
+        == f"http://{site_settings.site.domain}/media/thumbnails/{thumbnail_mock.name}"
     )
 
 
 def test_query_user_avatar_only_format_provided_original_image_returned(
-    staff_api_client, media_root, permission_manage_staff
+    staff_api_client, media_root, permission_manage_staff, site_settings
 ):
     # given
     user = staff_api_client.user
@@ -893,12 +894,12 @@ def test_query_user_avatar_only_format_provided_original_image_returned(
     data = content["data"]["user"]
     assert (
         data["avatar"]["url"]
-        == f"http://{TEST_SERVER_DOMAIN}/media/user-avatars/{avatar_mock.name}"
+        == f"http://{site_settings.site.domain}/media/user-avatars/{avatar_mock.name}"
     )
 
 
 def test_query_user_avatar_no_size_value(
-    staff_api_client, media_root, permission_manage_staff
+    staff_api_client, media_root, permission_manage_staff, site_settings
 ):
     # given
     user = staff_api_client.user
@@ -920,7 +921,7 @@ def test_query_user_avatar_no_size_value(
     data = content["data"]["user"]
     assert (
         data["avatar"]["url"]
-        == f"http://{TEST_SERVER_DOMAIN}/media/user-avatars/{avatar_mock.name}"
+        == f"http://{site_settings.site.domain}/media/user-avatars/{avatar_mock.name}"
     )
 
 
@@ -2591,7 +2592,7 @@ def test_customer_delete_by_app(
     assert mocked_deletion_event.call_count == 1
     args, kwargs = mocked_deletion_event.call_args
     assert kwargs["deleted_count"] == 1
-    assert kwargs["staff_user"].is_anonymous
+    assert kwargs["staff_user"] is None
     assert kwargs["app"] == app
     delete_from_storage_task_mock.assert_called_once_with(customer_user.avatar.name)
 
@@ -4969,7 +4970,10 @@ def test_account_reset_password_user_is_inactive(
     mocked_notify, user_api_client, customer_user, channel_USD
 ):
     user = customer_user
+    user.id = None
+    user.email = "test_customer@example.com"
     user.is_active = False
+    user.uuid = uuid4()
     user.save()
 
     variables = {
@@ -5378,8 +5382,9 @@ def test_user_avatar_update_mutation_permission(api_client):
     assert_no_permission(response)
 
 
-def test_user_avatar_update_mutation(monkeypatch, staff_api_client, media_root):
-    # given
+def test_user_avatar_update_mutation(
+    monkeypatch, staff_api_client, media_root, site_settings
+):
     query = USER_AVATAR_UPDATE_MUTATION
 
     user = staff_api_client.user
@@ -5399,7 +5404,7 @@ def test_user_avatar_update_mutation(monkeypatch, staff_api_client, media_root):
 
     assert user.avatar
     assert data["user"]["avatar"]["url"].startswith(
-        f"http://{TEST_SERVER_DOMAIN}/media/user-avatars/avatar"
+        f"http://{site_settings.site.domain}/media/user-avatars/avatar"
     )
     img_name, format = os.path.splitext(image_file._name)
     file_name = user.avatar.name
@@ -5408,8 +5413,9 @@ def test_user_avatar_update_mutation(monkeypatch, staff_api_client, media_root):
     assert file_name.endswith(format)
 
 
-def test_user_avatar_update_mutation_image_exists(staff_api_client, media_root):
-    # given
+def test_user_avatar_update_mutation_image_exists(
+    staff_api_client, media_root, site_settings
+):
     query = USER_AVATAR_UPDATE_MUTATION
 
     user = staff_api_client.user
@@ -5437,7 +5443,7 @@ def test_user_avatar_update_mutation_image_exists(staff_api_client, media_root):
 
     assert user.avatar != avatar_mock
     assert data["user"]["avatar"]["url"].startswith(
-        f"http://{TEST_SERVER_DOMAIN}/media/user-avatars/new_image"
+        f"http://{site_settings.site.domain}/media/user-avatars/new_image"
     )
     assert not user.thumbnails.exists()
 
