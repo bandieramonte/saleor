@@ -428,7 +428,7 @@ PLAYGROUND_ENABLED = get_bool_from_env("PLAYGROUND_ENABLED", True)
 
 ALLOWED_HOSTS = get_list(
     os.environ.get(
-        "ALLOWED_HOSTS", "localhost,127.0.0.1,a745-91-82-210-178.eu.ngrok.io"
+        "ALLOWED_HOSTS", "localhost,127.0.0.1,c185-170-81-145-152.eu.ngrok.io"
     )
 )
 ALLOWED_GRAPHQL_ORIGINS = get_list(os.environ.get("ALLOWED_GRAPHQL_ORIGINS", "*"))
@@ -794,6 +794,12 @@ PRODUCT_MAX_INDEXED_VARIANTS = 1000
 
 executor.SubscriberExecutionContext = PatchedSubscriberExecutionContext  # type: ignore
 
+# Optional queue names for Celery tasks.
+# Set None to route to the default queue, or a string value to use a separate one
+#
+# Queue name for update search vector
 UPDATE_SEARCH_VECTOR_INDEX_QUEUE_NAME = os.environ.get(
     "UPDATE_SEARCH_VECTOR_INDEX_QUEUE_NAME", None
 )
+# Queue name for "async webhook" events
+WEBHOOK_CELERY_QUEUE_NAME = os.environ.get("WEBHOOK_CELERY_QUEUE_NAME", None)

@@ -160,6 +160,28 @@ QUERY_FETCH_ALL_PRODUCTS = """
 """
 
 
+QUERY_PRODUCTS_AVAILABILITY = """
+    query ($channel:String){
+        products(first: 10, channel: $channel) {
+            totalCount
+            edges {
+                node {
+                    id
+                    name
+                    isAvailable
+                    variants {
+                        quantityAvailable
+                        stocks {
+                            quantity
+                        }
+                    }
+                }
+            }
+        }
+    }
+"""
+
+
 QUERY_PRODUCT = """
     query ($id: ID, $slug: String, $channel:String){
         product(
@@ -1794,6 +1816,84 @@ def test_fetch_all_products_visible_in_listings_by_app_without_manage_products(
     assert len(product_data) == product_count - 1  # invisible doesn't count
 
 
+def test_fetch_all_products_with_availability_data(
+    staff_api_client, permission_manage_products, product_list, channel_USD, order_line
+):
+    # given
+    product_1, product_2, product_3 = product_list
+    allocations = []
+
+    product_1_qty = 0
+    product_1_qty_allocated = 1
+    product_1_stock = product_1.variants.first().stocks.first()
+    product_1_stock.quantity = product_1_qty
+    product_1_stock.save(update_fields=["quantity"])
+    allocations.append(
+        Allocation(
+            order_line=order_line,
+            stock=product_1_stock,
+            quantity_allocated=product_1_qty_allocated,
+        )
+    )
+
+    product_2_qty = 15
+    product_2_qty_allocated = 2
+    product_2_stock = product_2.variants.first().stocks.first()
+    product_2_stock.quantity = product_2_qty
+    product_2_stock.save(update_fields=["quantity"])
+    allocations.append(
+        Allocation(
+            order_line=order_line,
+            stock=product_2_stock,
+            quantity_allocated=product_2_qty_allocated,
+        )
+    )
+
+    product_3_qty = 10
+    product_3_qty_allocated = 0
+    product_3_stock = product_3.variants.first().stocks.first()
+    product_3_stock.quantity = product_3_qty
+    product_3_stock.save(update_fields=["quantity"])
+
+    Allocation.objects.bulk_create(allocations)
+
+    variables = {"channel": channel_USD.slug}
+
+    # when
+    response = staff_api_client.post_graphql(
+        QUERY_PRODUCTS_AVAILABILITY,
+        variables,
+        permissions=(permission_manage_products,),
+        check_no_permissions=False,
+    )
+
+    # then
+    content = get_graphql_content(response)
+    num_products = Product.objects.count()
+    assert content["data"]["products"]["totalCount"] == num_products
+    product_data = content["data"]["products"]["edges"]
+    assert len(product_data) == num_products
+    for product, quantity, quantity_allocated in zip(
+        product_list,
+        [product_1_qty, product_2_qty, product_3_qty],
+        [product_1_qty_allocated, product_2_qty_allocated, product_3_qty_allocated],
+    ):
+        data = {
+            "node": {
+                "id": graphene.Node.to_global_id("Product", product.id),
+                "name": product.name,
+                "isAvailable": quantity > 0,
+                "variants": [
+                    {
+                        "quantityAvailable": max(quantity - quantity_allocated, 0),
+                        "stocks": [{"quantity": quantity}],
+                    }
+                ],
+            }
+        }
+        assert data in product_data
+
+
 def test_fetch_product_from_category_query(
     staff_api_client, product, permission_manage_products, stock, channel_USD
 ):
@@ -2061,14 +2161,15 @@ def test_products_query_with_filter_attributes(
 @pytest.mark.parametrize(
     "gte, lte, expected_products_index",
     [
-        (None, 8, [1]),
-        (0, 8, [1]),
+        (None, 8, [1, 2]),
+        (0, 8, [1, 2]),
         (7, 8, []),
-        (5, None, [0, 1]),
+        (5, None, [0, 1, 2]),
         (8, 10, [0]),
         (12, None, [0]),
         (20, None, []),
         (20, 8, []),
+        (5, 5, [1, 2]),
     ],
 )
 def test_products_query_with_filter_numeric_attributes(
@@ -2103,15 +2204,28 @@ def test_products_query_with_filter_numeric_attributes(
         category=category,
     )
     attr_value = AttributeValue.objects.create(
-        attribute=numeric_attribute, name="5.2", slug="5_2"
+        attribute=numeric_attribute, name="5", slug="5"
     )
 
     associate_attribute_values_to_instance(
         second_product, numeric_attribute, attr_value
     )
 
+    third_product = Product.objects.create(
+        name="Third product",
+        slug="third-product",
+        product_type=product_type,
+        category=category,
+    )
+    attr_value = AttributeValue.objects.create(
+        attribute=numeric_attribute, name="5", slug="5_X"
+    )
+
+    associate_attribute_values_to_instance(third_product, numeric_attribute, attr_value)
+
     second_product.refresh_from_db()
-    products_instances = [product, second_product]
+    third_product.refresh_from_db()
+    products_instances = [product, second_product, third_product]
     products_ids = [
         graphene.Node.to_global_id("Product", p.pk) for p in products_instances
     ]
@@ -9699,6 +9813,7 @@ def test_product_media_create_mutation(
     permission_manage_products,
     media_root,
 ):
+    staff_api_client.user.user_permissions.add(permission_manage_products)
     image_file, image_name = create_image()
     variables = {
         "product": graphene.Node.to_global_id("Product", product.id),
@@ -9708,9 +9823,7 @@ def test_product_media_create_mutation(
     body = get_multipart_request_body(
         PRODUCT_MEDIA_CREATE_QUERY, variables, image_file, image_name
     )
-    response = staff_api_client.post_multipart(
-        body, permissions=[permission_manage_products]
-    )
+    response = staff_api_client.post_multipart(body)
     get_graphql_content(response)
     product.refresh_from_db()
     product_image = product.media.last()
